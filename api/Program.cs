@@ -5,6 +5,7 @@ using Diyalog360.Api.Services;
 //   dotnet run                 → API (http://localhost:5080)
 //   dotnet run -- seed         → demo veritabanını (Data/bank.db) bugüne göre yeniden üret
 //   dotnet run -- eval [id]    → eval/questions.json ile doğruluk ölçümü (llama-server açık olmalı)
+Console.OutputEncoding = System.Text.Encoding.UTF8; // Windows konsolunda Türkçe karakter ve ✅/❌ için
 var builder = WebApplication.CreateBuilder(args);
 var root = builder.Environment.ContentRootPath;
 var dataDir = Path.Combine(root, "Data");

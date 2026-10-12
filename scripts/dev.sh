@@ -6,4 +6,6 @@ export DOTNET_CLI_TELEMETRY_OPTOUT=1
 (cd api && dotnet run) &
 API_PID=$!
 trap 'kill $API_PID 2>/dev/null' EXIT
-cd web && npm run dev
+cd web
+[ -d node_modules ] || npm install
+npm run dev

@@ -19,7 +19,11 @@ public sealed class DemoDbFixture : IDisposable
         Runner = new QueryRunner(DbPath, new SqlGuard(Catalog), Catalog, maxRows: 1000, timeoutSeconds: 5);
     }
 
-    public void Dispose() => File.Delete(DbPath);
+    public void Dispose()
+    {
+        // Windows'ta dosya kilidi kalabilir; geçici dosyanın silinememesi testi bozmamalı
+        try { File.Delete(DbPath); } catch (IOException) { }
+    }
 }
 
 public sealed class SqlGuardTests(DemoDbFixture db) : IClassFixture<DemoDbFixture>

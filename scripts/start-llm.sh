@@ -8,6 +8,11 @@ if curl -sf "http://127.0.0.1:$PORT/health" >/dev/null 2>&1; then
   echo "llama-server zaten 127.0.0.1:$PORT üzerinde çalışıyor; yeniden başlatmaya gerek yok."
   exit 0
 fi
+if [ ! -f "$MODEL" ]; then
+  echo "Model dosyası bulunamadı: $MODEL" >&2
+  echo "LLM_MODEL ortam değişkeniyle yolu verin: export LLM_MODEL=~/models/Qwen3-30B-A3B-Instruct-2507-IQ4_XS.gguf" >&2
+  exit 1
+fi
 exec llama-server \
   --model "$MODEL" \
   --ctx-size 8192 --parallel 1 --n-gpu-layers 99 \
