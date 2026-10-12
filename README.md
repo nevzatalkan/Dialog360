@@ -1,7 +1,7 @@
 # Diyalog 360
 
 Türkçe sorulan rapor isteğini veritabanı şemasını bilerek SQL'e çeviren, sorguyu güvenle çalıştıran ve sonucu
-grafik, tablo ve Türkçe özetle sunan sohbet tabanlı raporlama asistanı. Tamamen yerel çalışır (Qwen + llama.cpp).
+grafik, tablo ve Türkçe özetle sunan sohbet tabanlı raporlama asistanı. Varsayılan olarak Ollama'daki Qwen modeliyle tamamen yerel çalışır.
 
 ## Çalıştırma
 
@@ -9,15 +9,17 @@ Sistem üç parçadan oluşur:
 
 | Parça | Ne | Adres |
 |---|---|---|
-| Model sunucusu | `llama-server` (llama.cpp) + Qwen GGUF modeli | http://127.0.0.1:18080/v1 |
+| Model sunucusu | Ollama (varsayılan) | http://127.0.0.1:11434/v1 |
 | API | .NET 10 (`api/`) | http://localhost:5080 |
 | Önyüz | React + Vite (`web/`) | 5080 (derlenmiş) veya 5173 (geliştirme) |
 
-Aşağıda önce iki işletim sisteminde ortak olan model dosyası, ardından **macOS** ve **Windows** için ayrı adımlar var.
+Varsayılan ayarlar `api/appsettings.json` içinde `qwen2.5-coder:7b` modelini kullanır. Ollama kuruluysa modeli indirin (`ollama pull qwen2.5-coder:7b`), Ollama'nın çalıştığını doğrulayın ve projeyi başlatın. API hazır olduğunda `http://localhost:5080/api/health` adresinde `llm: true` görünür.
 
-### Model dosyası (ortak)
+Aşağıdaki **macOS** ve **Windows** adımları, istenirse kullanılabilecek `llama.cpp` alternatifini anlatır. Bu alternatife geçerken `Llm:BaseUrl` değerini `http://127.0.0.1:18080/v1`, `Llm:Model` değerini model adına göre ayarlayın ve `Llm:LlamaCachePrompt` değerini `true` yapın.
 
-Varsayılan model: **Qwen3-30B-A3B-Instruct-2507 IQ4_XS** (~16 GB) —
+### llama.cpp için örnek model dosyası
+
+Örnek model: **Qwen3-30B-A3B-Instruct-2507 IQ4_XS** (~16 GB) —
 [unsloth/Qwen3-30B-A3B-Instruct-2507-GGUF](https://huggingface.co/unsloth/Qwen3-30B-A3B-Instruct-2507-GGUF) reposundaki
 `Qwen3-30B-A3B-Instruct-2507-IQ4_XS.gguf` dosyası
 ([doğrudan indirme](https://huggingface.co/unsloth/Qwen3-30B-A3B-Instruct-2507-GGUF/resolve/main/Qwen3-30B-A3B-Instruct-2507-IQ4_XS.gguf)).
@@ -47,7 +49,7 @@ Model dosyasını indirin (örn. `~/models/` klasörüne). Scriptler modeli `LLM
 export LLM_MODEL=~/models/Qwen3-30B-A3B-Instruct-2507-IQ4_XS.gguf
 ```
 
-### Hızlı başlangıç (scriptlerle)
+### Hızlı başlangıç (scriptlerle, llama.cpp alternatifi)
 
 ```bash
 scripts/start-llm.sh        # 1. terminal: yerel model → http://127.0.0.1:18080/v1
@@ -134,7 +136,7 @@ cd Dialog360
 
 Model dosyasını indirin, örneğin `C:\models\Qwen3-30B-A3B-Instruct-2507-IQ4_XS.gguf`.
 
-### Hızlı başlangıç (scriptlerle)
+### Hızlı başlangıç (scriptlerle, llama.cpp alternatifi)
 
 ```powershell
 # 1. terminal: yerel model
