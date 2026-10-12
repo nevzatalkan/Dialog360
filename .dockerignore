@@ -1,0 +1,10 @@
+.git
+.azure
+.vscode
+**/bin
+**/obj
+**/node_modules
+**/dist
+**/wwwroot
+**/.env
+**/*.db

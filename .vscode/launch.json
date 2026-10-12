@@ -1,0 +1,24 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Dialog360 Foundry SQL Agent",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build Dialog360 Foundry agent",
+      "program": "${workspaceFolder}/src/d360-sql-agent/bin/Debug/net10.0/d360-sql-agent.dll",
+      "args": [],
+      "cwd": "${workspaceFolder}/src/d360-sql-agent",
+      "env": {
+        "FOUNDRY_PROJECT_ENDPOINT": "${env:FOUNDRY_PROJECT_ENDPOINT}",
+        "AZURE_AI_MODEL_DEPLOYMENT_NAME": "${env:AZURE_AI_MODEL_DEPLOYMENT_NAME}",
+        "ASPNETCORE_URLS": "http://localhost:8088"
+      },
+      "serverReadyAction": {
+        "action": "openExternally",
+        "pattern": "Now listening on: (https?://\\S+)",
+        "uriFormat": "%s"
+      }
+    }
+  ]
+}

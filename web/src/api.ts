@@ -63,5 +63,5 @@ export const api = {
   runSql: (chatId: string | null, sql: string) => post('/api/sql', { chatId, sql }).then(r => json<ChatResponse>(r)),
   history: (chatId: string) => fetch(`/api/history/${chatId}`).then(r => json<HistoryItem[]>(r)),
   schema: () => fetch('/api/schema').then(r => json<TableInfo[]>(r)),
-  health: () => fetch('/api/health').then(r => json<{ llm: boolean; model: string; tables: number }>(r)),
+  health: () => fetch('/api/health').then(r => json<{ llm: boolean; model: string; provider: string; tables: number }>(r)),
 }

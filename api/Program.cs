@@ -1,10 +1,12 @@
 using Diyalog360.Api.Data;
 using Diyalog360.Api.Services;
+using Azure.Core;
+using Azure.Identity;
 
 // Kullanım:
 //   dotnet run                 → API (http://localhost:5080)
 //   dotnet run -- seed         → demo veritabanını (Data/bank.db) bugüne göre yeniden üret
-//   dotnet run -- eval [id]    → eval/questions.json ile doğruluk ölçümü (llama-server açık olmalı)
+//   dotnet run -- eval [id]    → eval/questions.json ile doğruluk ölçümü (model servisi açık olmalı)
 Console.OutputEncoding = System.Text.Encoding.UTF8; // Windows konsolunda Türkçe karakter ve ✅/❌ için
 var builder = WebApplication.CreateBuilder(args);
 var root = builder.Environment.ContentRootPath;
@@ -28,6 +30,10 @@ var guard = new SqlGuard(catalog);
 File.WriteAllText(Path.Combine(dataDir, "prompt.generated.md"), promptBuilder.SystemPrompt);
 
 builder.Services.AddSingleton(llmOptions);
+builder.Services.AddSingleton<TokenCredential>(_ =>
+    llmOptions.UseManagedIdentity
+        ? new ManagedIdentityCredential(ManagedIdentityId.SystemAssigned)
+        : new DefaultAzureCredential());
 builder.Services.AddSingleton(catalog);
 builder.Services.AddSingleton(promptBuilder);
 builder.Services.AddSingleton(guard);
@@ -73,13 +79,14 @@ app.MapGet("/api/history/{chatId}", (string chatId, AppStore store) =>
 app.MapGet("/api/schema", (SchemaCatalog c) => c.Tables);
 
 app.MapGet("/api/health", async (LlmClient llm, SchemaCatalog c, CancellationToken ct) =>
-    new { llm = await llm.IsHealthyAsync(ct), model = llm.Model, tables = c.Tables.Count });
+    new { llm = await llm.IsHealthyAsync(ct), model = llm.Model, provider = llm.Provider, tables = c.Tables.Count });
 
 app.MapFallbackToFile("index.html");
 
 // Sabit sistem prompt'unu açılışta modele okut: ilk kullanıcı sorusu da hızlı cevaplansın.
 app.Lifetime.ApplicationStarted.Register(() => _ = Task.Run(async () =>
 {
+    if (llmOptions.UsesFoundryAgent) return;
     try
     {
         using var scope = app.Services.CreateScope();
@@ -87,7 +94,7 @@ app.Lifetime.ApplicationStarted.Register(() => _ = Task.Run(async () =>
     }
     catch (Exception ex)
     {
-        app.Logger.LogWarning("LLM ısıtılamadı ({Message}); llama-server açık mı?", ex.Message);
+        app.Logger.LogWarning("LLM ısıtılamadı ({Message}); model servisi kullanılabilir mi?", ex.Message);
     }
 }));
 

@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Azure.Identity;
 
 namespace Diyalog360.Api.Services;
 
@@ -121,11 +122,11 @@ public sealed class ChatOrchestrator(PromptBuilder prompt, LlmClient llm, QueryR
                 llmMs += retryMs;
             }
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or InvalidOperationException)
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or InvalidOperationException or AuthenticationFailedException)
         {
             log.LogWarning(ex, "LLM çağrısı başarısız");
             return Finish(Response("error", "Model servisine ulaşılamadı",
-                "Dil modeli şu anda cevap vermiyor. Daha önce sorulmuş sorular önbellekten cevaplanmaya devam eder; llama-server'ın çalıştığını kontrol edin."),
+                $"Daha önce sorulmuş sorular önbellekten cevaplanmaya devam eder. {llm.FailureHint}"),
                 null, 0, 0, ex.Message);
         }
 

@@ -3,6 +3,45 @@
 Türkçe sorulan rapor isteğini veritabanı şemasını bilerek SQL'e çeviren, sorguyu güvenle çalıştıran ve sonucu
 grafik, tablo ve Türkçe özetle sunan sohbet tabanlı raporlama asistanı. Varsayılan olarak Ollama'daki Qwen modeliyle tamamen yerel çalışır.
 
+## Microsoft Foundry (POC)
+
+Foundry yapılandırması tek bir C# Responses Hosted Agent kullanır. React yalnızca mevcut `/api/*` uçlarına gider; API, Foundry ajanından yapılandırılmış yanıtı alır ve üretilen SQL'i değiştirmeden önce mevcut `SqlGuard` ve `QueryRunner` sınırlarından geçirir. Ajanın veritabanı bağlantısı veya SQL çalıştırma aracı yoktur.
+
+Seçilen model `gpt-5-mini` (`2025-08-07`); North Central US bölgesinde `GlobalStandard` için son kontrolde 450.000 TPM kullanılabilir kota vardı. Bu kapasite ve model dağıtımı, kaynak oluşturulurken yeniden doğrulanmalıdır. `.azure/deployment-plan.md` içinde bölge ve kaynak ayrıntıları bulunur.
+
+### Yerel Hosted Agent denemesi
+
+Önce Azure CLI ile kendi hesabınızda oturum açın ve mevcut Foundry projesi/model dağıtımına erişiminiz olduğundan emin olun. İki PowerShell terminali kullanın:
+
+```powershell
+# 1. terminal: yerel AgentServer
+$env:FOUNDRY_PROJECT_ENDPOINT = "https://<account>.services.ai.azure.com/api/projects/<project>"
+$env:AZURE_AI_MODEL_DEPLOYMENT_NAME = "gpt-5-mini"
+dotnet run --project src\d360-sql-agent\d360-sql-agent.csproj
+```
+
+```powershell
+# 2. terminal: mevcut API'yi yerel agent'a yönlendir
+$env:Llm__Provider = "FoundryAgent"
+$env:Llm__AgentEndpoint = "http://localhost:8088/responses"
+$env:Llm__Model = "gpt-5-mini"
+$env:Llm__UseManagedIdentity = "false"
+dotnet run --project api\Diyalog360.Api.csproj
+```
+
+Yerel API, `DefaultAzureCredential` kullanır; Azure CLI/Developer CLI oturumunuzun Foundry projesinde agent çağırma izni olmalıdır. Dağıtımda API'nin sistem tarafından atanan managed identity'sine en az yetkili `Foundry Agent Consumer` rolü verilir. Foundry hesabı ve model dağıtımı hazır olduktan sonra `azd` yapılandırması `azure.yaml` üzerinden çalıştırılabilir.
+
+### Azure dağıtımı
+
+`azure.yaml` uygulama API'sinin container imajını ACR üzerinde remote build edecek şekilde ayarlıdır; yerel makinede Docker/Podman gerekmez. Hosted Agent ise AZD'nin .NET code deployment akışıyla paketlenir. `azd provision --preview --no-prompt` yalnızca önizleme yapar; kaynakları oluşturmaz. Doğrulama tamamlandıktan sonra:
+
+```powershell
+azd provision --no-prompt
+azd deploy --no-prompt
+```
+
+Dağıtım ortamı `Dialog360`; kaynak grubu `rg-dialog360-foundry-ncus-dev`, bölge `northcentralus` olarak yapılandırılmıştır.
+
 ## Çalıştırma
 
 Sistem üç parçadan oluşur:

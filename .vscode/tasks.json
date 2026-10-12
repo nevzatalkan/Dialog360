@@ -1,0 +1,15 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build Dialog360 Foundry agent",
+      "type": "process",
+      "command": "dotnet",
+      "args": [
+        "build",
+        "${workspaceFolder}/src/d360-sql-agent/d360-sql-agent.csproj"
+      ],
+      "problemMatcher": "$msCompile"
+    }
+  ]
+}

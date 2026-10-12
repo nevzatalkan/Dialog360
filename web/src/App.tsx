@@ -20,7 +20,7 @@ export default function App() {
   const [input, setInput] = useState('')
   const [pending, setPending] = useState<{ text: string; started: number } | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [health, setHealth] = useState<{ llm: boolean; model: string } | null>(null)
+  const [health, setHealth] = useState<{ llm: boolean; model: string; provider: string } | null>(null)
   const [showSchema, setShowSchema] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
 
@@ -89,7 +89,7 @@ export default function App() {
             <span className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs ${health?.llm ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}
               title={health?.model}>
               <span className={`h-1.5 w-1.5 rounded-full ${health?.llm ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-              {health?.llm ? `Yerel model hazır` : health ? 'Model kapalı · yalnızca önbellek' : 'API bağlantısı yok'}
+              {health?.llm ? health.provider === 'foundry-agent' ? 'Foundry ajanı hazır' : 'Yerel model hazır' : health ? 'Model kapalı · yalnızca önbellek' : 'API bağlantısı yok'}
             </span>
             <button onClick={() => setShowSchema(s => !s)} className="rounded-lg px-3 py-1.5 text-slate-600 hover:bg-slate-100">Veri kataloğu</button>
             <button onClick={newChat} className="rounded-lg border border-slate-200 px-3 py-1.5 text-slate-700 hover:bg-slate-50">Yeni sohbet</button>
