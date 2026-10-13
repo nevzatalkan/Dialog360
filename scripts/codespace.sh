@@ -11,7 +11,17 @@ export Llm__LlamaCachePrompt=false
 if [[ -z "${Llm__HealthUrl:-}" && "$Llm__BaseUrl" == https://models.github.ai/* ]]; then
   export Llm__HealthUrl=https://models.github.ai/catalog/models
 fi
-[ -n "$Llm__ApiKey" ] || echo "UYARI: API anahtarı yok (GITHUB_TOKEN / GH_MODELS_TOKEN / Llm__ApiKey)." >&2
-echo "LLM: $Llm__Model @ $Llm__BaseUrl"
+if [ -n "${GH_MODELS_TOKEN:-}" ]; then KEY_SRC=GH_MODELS_TOKEN; elif [ -n "${GITHUB_TOKEN:-}" ]; then KEY_SRC=GITHUB_TOKEN; else KEY_SRC=yok; fi
+echo "LLM: $Llm__Model @ $Llm__BaseUrl (anahtar: $KEY_SRC)"
+
+# Model erişimini baştan dene: hata varsa sebebi burada görünür.
+CODE=$(curl -sS -m 30 -o /tmp/llm-test.json -w '%{http_code}' "${Llm__BaseUrl%/}/chat/completions" \
+  -H "Authorization: Bearer $Llm__ApiKey" -H 'Content-Type: application/json' \
+  -d "{\"model\":\"$Llm__Model\",\"messages\":[{\"role\":\"user\",\"content\":\"merhaba\"}],\"max_tokens\":5}" || true)
+if [ "$CODE" = 200 ]; then
+  echo "LLM testi: OK"
+else
+  echo "LLM testi BAŞARISIZ (HTTP $CODE): $(head -c 400 /tmp/llm-test.json 2>/dev/null)" >&2
+fi
 (cd web && { [ -d node_modules ] || npm ci; } && npm run build)
 cd api && dotnet run -c Release -- --urls http://0.0.0.0:5080

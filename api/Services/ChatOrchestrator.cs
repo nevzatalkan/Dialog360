@@ -125,7 +125,8 @@ public sealed class ChatOrchestrator(PromptBuilder prompt, LlmClient llm, QueryR
         {
             log.LogWarning(ex, "LLM çağrısı başarısız");
             return Finish(Response("error", "Model servisine ulaşılamadı",
-                "Dil modeli şu anda cevap vermiyor. Daha önce sorulmuş sorular önbellekten cevaplanmaya devam eder; llama-server'ın çalıştığını kontrol edin."),
+                $"Dil modeli şu anda cevap vermiyor ({ex.Message[..Math.Min(ex.Message.Length, 300)]}). " +
+                "Daha önce sorulmuş sorular önbellekten cevaplanmaya devam eder; model sunucusunu ve API anahtarını kontrol edin."),
                 null, 0, 0, ex.Message);
         }
 
