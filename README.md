@@ -21,14 +21,14 @@ Aşağıda önce iki işletim sisteminde ortak olan model dosyası, ardından **
 
 Bilgisayara hiçbir şey kurmadan, tarayıcıda çalıştırmak için: GitHub'da repo sayfası → **Code → Codespaces →
 Create codespace on main**. Ortam (.NET 10 + Node 22) hazırlanır, `scripts/codespace.sh` kendiliğinden başlar ve
-5080 portu tarayıcıda açılır.
+5080 portu tarayıcıda açılır. İlk açılışta terminal, giriş ekranı için kullanıcı adı ve şifre sorar.
 
 - Yerel Qwen yerine ücretsiz **[GitHub Models](https://github.com/marketplace/models)** API'si kullanılır
   (varsayılan `openai/gpt-4.1-mini`). Anahtar gerekmez: Codespaces'in verdiği `GITHUB_TOKEN` kullanılır.
 - Ücretsiz katmanın dakikalık/günlük istek sınırı vardır; aynı soru tekrar sorulduğunda önbellekten gelir.
 - Token "unauthorized/forbidden" hatası verirse: *Models: read* izinli bir fine-grained token oluşturun ve
   GitHub → Settings → Codespaces → Secrets altına `GH_MODELS_TOKEN` adıyla ekleyin.
-- Başkasıyla paylaşmak için VS Code'un **Ports** sekmesinde 5080'e sağ tık → *Port Visibility → Public*.
+- Başkasıyla paylaşmak için VS Code'un **Ports** sekmesinde 5080'e sağ tık → *Port Visibility → Public*; uygulama girişli olduğu için kullanıcı adı ve şifreyi de paylaşmanız gerekir.
 - Codespace boşta kalınca durur; yeniden açınca `scripts/codespace.sh` tekrar çalışır.
 
 Başka bir OpenAI uyumlu ücretsiz servis (Google Gemini, Groq, OpenRouter...) için scripti ortam değişkenleriyle

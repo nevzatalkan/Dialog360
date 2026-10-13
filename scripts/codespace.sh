@@ -23,5 +23,14 @@ if [ "$CODE" = 200 ]; then
 else
   echo "LLM testi BAŞARISIZ (HTTP $CODE): $(head -c 400 /tmp/llm-test.json 2>/dev/null)" >&2
 fi
+# Giriş ekranı için tek kullanıcı (yalnızca ilk açılışta sorulur)
+if [ ! -f api/Data/auth.json ]; then
+  if [ -t 0 ]; then
+    echo "Uygulamaya giriş için kullanıcı adı ve şifre belirleyin:"
+    (cd api && dotnet run -- set-password)
+  else
+    echo "UYARI: kullanıcı tanımlı değil; giriş için: cd api && dotnet run -- set-password" >&2
+  fi
+fi
 (cd web && { [ -d node_modules ] || npm ci; } && npm run build)
 cd api && dotnet run -c Release -- --urls http://0.0.0.0:5080

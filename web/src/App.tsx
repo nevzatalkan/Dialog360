@@ -225,7 +225,7 @@ function Thinking({ started, manual }: { started: number; manual: boolean }) {
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 250); return () => clearInterval(t) }, [])
   const seconds = Math.floor((now - started) / 1000)
-  const step = manual ? 'Sorgu doğrulanıp çalıştırılıyor' : seconds < 2 ? 'Soru ve sohbet bağlamı hazırlanıyor' : 'Yerel model soruyu SQL\'e çeviriyor'
+  const step = manual ? 'Sorgu doğrulanıp çalıştırılıyor' : seconds < 2 ? 'Soru ve sohbet bağlamı hazırlanıyor' : 'Model soruyu SQL\'e çeviriyor'
   return (
     <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-5 py-4 text-sm text-slate-600 shadow-sm">
       <span className="flex gap-1">
