@@ -15,6 +15,28 @@ Sistem üç parçadan oluşur:
 
 Aşağıda önce iki işletim sisteminde ortak olan model dosyası, ardından **macOS** ve **Windows** için ayrı adımlar var.
 
+## GitHub Codespaces (kurulumsuz, ücretsiz LLM)
+
+Bilgisayara hiçbir şey kurmadan, tarayıcıda çalıştırmak için: GitHub'da repo sayfası → **Code → Codespaces →
+Create codespace on main**. Ortam (.NET 10 + Node 22) hazırlanır, `scripts/codespace.sh` kendiliğinden başlar ve
+5080 portu tarayıcıda açılır.
+
+- Yerel Qwen yerine ücretsiz **[GitHub Models](https://github.com/marketplace/models)** API'si kullanılır
+  (varsayılan `openai/gpt-4.1-mini`). Anahtar gerekmez: Codespaces'in verdiği `GITHUB_TOKEN` kullanılır.
+- Ücretsiz katmanın dakikalık/günlük istek sınırı vardır; aynı soru tekrar sorulduğunda önbellekten gelir.
+- Token "unauthorized/forbidden" hatası verirse: *Models: read* izinli bir fine-grained token oluşturun ve
+  GitHub → Settings → Codespaces → Secrets altına `GH_MODELS_TOKEN` adıyla ekleyin.
+- Başkasıyla paylaşmak için VS Code'un **Ports** sekmesinde 5080'e sağ tık → *Port Visibility → Public*.
+- Codespace boşta kalınca durur; yeniden açınca `scripts/codespace.sh` tekrar çalışır.
+
+Başka bir OpenAI uyumlu ücretsiz servis (Google Gemini, Groq, OpenRouter...) için scripti ortam değişkenleriyle
+çalıştırın (servis JSON şemalı çıktıyı desteklemelidir; doğruluğu `dotnet run -- eval` ile ölçün):
+
+```bash
+Llm__BaseUrl=https://generativelanguage.googleapis.com/v1beta/openai \
+Llm__Model=gemini-2.5-flash Llm__ApiKey=$GEMINI_API_KEY scripts/codespace.sh
+```
+
 ### Model dosyası (ortak)
 
 Varsayılan model: **Qwen3-30B-A3B-Instruct-2507 IQ4_XS** (~16 GB) —
@@ -290,8 +312,8 @@ api/        .NET 10 Minimal API
 web/        React + TypeScript + Vite + Tailwind + Recharts
 eval/       Doğruluk ölçüm seti
 tests/      xUnit güvenlik testleri
-scripts/    start-llm, dev, demo (.sh = macOS/Linux, .ps1 = Windows)
+scripts/    start-llm, dev, demo (.sh = macOS/Linux, .ps1 = Windows), codespace (Codespaces + GitHub Models)
 ```
 
 LLM istemcisi OpenAI uyumludur; `appsettings.json` → `Llm:BaseUrl/Model/ApiKey` değiştirilerek Azure OpenAI vb. bir servise geçilebilir
-(llama'ya özel `LlamaCachePrompt` ayarını `false` yapın).
+(llama'ya özel `LlamaCachePrompt` ayarını `false` yapın; servisin `/models` ucu yoksa `Llm:HealthUrl` verin).

@@ -78,7 +78,8 @@ app.MapGet("/api/health", async (LlmClient llm, SchemaCatalog c, CancellationTok
 app.MapFallbackToFile("index.html");
 
 // Sabit sistem prompt'unu açılışta modele okut: ilk kullanıcı sorusu da hızlı cevaplansın.
-app.Lifetime.ApplicationStarted.Register(() => _ = Task.Run(async () =>
+// Uzak API'lerde (LlamaCachePrompt=false) KV önbelleği yok; ısınma yalnızca istek kotası harcar.
+if (llmOptions.LlamaCachePrompt) app.Lifetime.ApplicationStarted.Register(() => _ = Task.Run(async () =>
 {
     try
     {

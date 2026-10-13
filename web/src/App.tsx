@@ -89,7 +89,7 @@ export default function App() {
             <span className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs ${health?.llm ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}
               title={health?.model}>
               <span className={`h-1.5 w-1.5 rounded-full ${health?.llm ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-              {health?.llm ? `Yerel model hazır` : health ? 'Model kapalı · yalnızca önbellek' : 'API bağlantısı yok'}
+              {health?.llm ? 'Model hazır' : health ? 'Model kapalı · yalnızca önbellek' : 'API bağlantısı yok'}
             </span>
             <button onClick={() => setShowSchema(s => !s)} className="rounded-lg px-3 py-1.5 text-slate-600 hover:bg-slate-100">Veri kataloğu</button>
             <button onClick={newChat} className="rounded-lg border border-slate-200 px-3 py-1.5 text-slate-700 hover:bg-slate-50">Yeni sohbet</button>

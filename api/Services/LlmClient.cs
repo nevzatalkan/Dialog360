@@ -17,6 +17,8 @@ public sealed class LlmOptions
     public int TimeoutSeconds { get; set; } = 240;
     /// <summary>llama-server'a sabit prompt önekini KV önbellekte tutmasını söyler.</summary>
     public bool LlamaCachePrompt { get; set; } = true;
+    /// <summary>Sağlık kontrolü için GET atılacak adres; boşsa {BaseUrl}/models (GitHub Models'te bu uç yok).</summary>
+    public string? HealthUrl { get; set; }
 }
 
 public record ChatMessage(string Role, string Content);
@@ -103,7 +105,8 @@ public sealed class LlmClient(HttpClient http, LlmOptions options, ILogger<LlmCl
         {
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             cts.CancelAfter(TimeSpan.FromSeconds(3));
-            using var req = new HttpRequestMessage(HttpMethod.Get, $"{options.BaseUrl.TrimEnd('/')}/models");
+            using var req = new HttpRequestMessage(HttpMethod.Get,
+                string.IsNullOrEmpty(options.HealthUrl) ? $"{options.BaseUrl.TrimEnd('/')}/models" : options.HealthUrl);
             AddAuth(req);
             using var res = await http.SendAsync(req, cts.Token);
             return res.IsSuccessStatusCode;
