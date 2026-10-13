@@ -13,6 +13,9 @@ public sealed class PromptBuilder
 
     public string SystemPrompt { get; }
 
+    /// <summary>Sistem prompt'unun parmak izi: prompt dosyaları değişince önbellekteki eski cevaplar kullanılmaz.</summary>
+    public string Version { get; }
+
     public PromptBuilder(string promptDir, SchemaCatalog catalog)
     {
         string Read(string file) => File.ReadAllText(Path.Combine(promptDir, file)).Trim();
@@ -28,6 +31,7 @@ public sealed class PromptBuilder
             ## Örnekler (soru → beklenen JSON)
             {Read("examples.md")}
             """;
+        Version = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(SystemPrompt)))[..16];
     }
 
     public static string UserMessage(string historyText, string message) =>

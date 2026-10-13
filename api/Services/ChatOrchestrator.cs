@@ -43,7 +43,7 @@ public sealed class ChatOrchestrator(PromptBuilder prompt, LlmClient llm, QueryR
         store.AddMessage(chatId, "user", message);
 
         var (historyText, anchor) = PromptBuilder.History(history);
-        var cacheKey = CacheKey(message, anchor);
+        var cacheKey = CacheKey(message, anchor, prompt.Version);
         var messages = new List<ChatMessage>
         {
             new("system", prompt.SystemPrompt),
@@ -185,9 +185,9 @@ public sealed class ChatOrchestrator(PromptBuilder prompt, LlmClient llm, QueryR
     }
 
     /// <summary>Aynı soru (aynı sohbet bağlamında) → aynı cevap. Demo sırasında LLM'siz çalışmayı da sağlar.</summary>
-    static string CacheKey(string message, string anchor)
+    static string CacheKey(string message, string anchor, string promptVersion)
     {
         var normalized = Regex.Replace(message.ToLower(CultureInfo.GetCultureInfo("tr-TR")), @"[^\p{L}\p{N}]+", " ").Trim();
-        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(normalized + "\n" + anchor)))[..32];
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(normalized + "\n" + anchor + "\n" + promptVersion)))[..32];
     }
 }

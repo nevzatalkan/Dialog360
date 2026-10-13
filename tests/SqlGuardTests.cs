@@ -71,6 +71,14 @@ public sealed class SqlGuardTests(DemoDbFixture db) : IClassFixture<DemoDbFixtur
         Assert.Equal(GuardStatus.Invalid, db.Runner.Run(sql).Status);
 
     [Fact]
+    public void Devasa_metin_ureten_sorgu_bellegi_tuketemez()
+    {
+        var r = db.Runner.Run("SELECT length(printf('%900000000c', 'x'))");
+        Assert.Equal(GuardStatus.Invalid, r.Status);
+        Assert.Contains("too big", r.Error);
+    }
+
+    [Fact]
     public void Kullanilan_tablo_ve_kolonlar_raporlanir()
     {
         var r = db.Runner.Run("SELECT s.Ad, SUM(i.Tutar) FROM Islem i JOIN Sektor s ON i.SektorId = s.Id GROUP BY s.Ad");

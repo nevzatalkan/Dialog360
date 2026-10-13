@@ -47,12 +47,24 @@ export interface ColumnInfo {
 }
 export interface TableInfo { name: string; description: string | null; rowCount: number; columns: ColumnInfo[] }
 
+/** Oturum düştüğünde (401) uygulama bu olayı dinleyip giriş ekranına döner. */
+export const UNAUTHORIZED_EVENT = 'd360:unauthorized'
+
+export class ApiError extends Error {
+  readonly status: number
+  constructor(message: string, status: number) {
+    super(message)
+    this.status = status
+  }
+}
+
 async function json<T>(res: Response): Promise<T> {
   if (!res.ok) {
     const body = await res.json().catch(() => null)
-    throw new Error(body?.error ?? `Sunucu hatası (${res.status})`)
+    if (res.status === 401) window.dispatchEvent(new Event(UNAUTHORIZED_EVENT))
+    throw new ApiError(body?.error ?? `Sunucu hatası (${res.status})`, res.status)
   }
-  return res.json() as Promise<T>
+  return (res.status === 204 ? undefined : res.json()) as Promise<T>
 }
 
 const post = (url: string, body: unknown) =>
@@ -61,7 +73,23 @@ const post = (url: string, body: unknown) =>
 export const api = {
   chat: (chatId: string | null, message: string) => post('/api/chat', { chatId, message }).then(r => json<ChatResponse>(r)),
   runSql: (chatId: string | null, sql: string) => post('/api/sql', { chatId, sql }).then(r => json<ChatResponse>(r)),
-  history: (chatId: string) => fetch(`/api/history/${chatId}`).then(r => json<HistoryItem[]>(r)),
+  history: (chatId: string) => fetch(`/api/history/${encodeURIComponent(chatId)}`).then(r => json<HistoryItem[]>(r)),
+  deleteChat: (chatId: string) => fetch(`/api/chats/${encodeURIComponent(chatId)}`, { method: 'DELETE' }).then(r => json<void>(r)),
   schema: () => fetch('/api/schema').then(r => json<TableInfo[]>(r)),
   health: () => fetch('/api/health').then(r => json<{ llm: boolean; model: string; tables: number }>(r)),
+}
+
+/** Giriş uçları: 401 burada beklenen bir cevaptır, global olay tetiklenmez. */
+export const auth = {
+  me: async (): Promise<{ username: string } | { configured: boolean }> => {
+    const res = await fetch('/api/auth/me')
+    return res.json()
+  },
+  login: async (username: string, password: string): Promise<{ username: string }> => {
+    const res = await post('/api/auth/login', { username, password })
+    const body = await res.json().catch(() => null)
+    if (!res.ok) throw new ApiError(body?.error ?? `Giriş başarısız (${res.status})`, res.status)
+    return body
+  },
+  logout: () => fetch('/api/auth/logout', { method: 'POST' }),
 }

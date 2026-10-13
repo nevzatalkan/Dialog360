@@ -17,3 +17,7 @@ eval/results.json
 
 .DS_Store
 .claude/settings.local.json
+
+# Kimlik doğrulama ve oturum anahtarları
+api/Data/auth.json
+api/Data/keys/

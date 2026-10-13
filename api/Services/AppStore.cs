@@ -20,6 +20,7 @@ public sealed class AppStore
             CREATE INDEX IF NOT EXISTS IX_Message_ChatId ON Message(ChatId);
             CREATE TABLE IF NOT EXISTS LlmCache (Key TEXT PRIMARY KEY, Question TEXT NOT NULL, Answer TEXT NOT NULL,
                 Hits INTEGER NOT NULL DEFAULT 0, CreatedAt TEXT NOT NULL DEFAULT (datetime('now','localtime')));
+            CREATE TABLE IF NOT EXISTS Session (Id TEXT PRIMARY KEY, CreatedAt TEXT NOT NULL DEFAULT (datetime('now','localtime')));
             CREATE TABLE IF NOT EXISTS QueryLog (Id INTEGER PRIMARY KEY, ChatId TEXT, Question TEXT, Kind TEXT, Sql TEXT,
                 Rows INTEGER, Attempts INTEGER, FromCache INTEGER, LlmMs INTEGER, DbMs INTEGER, TotalMs INTEGER, Error TEXT,
                 CreatedAt TEXT NOT NULL DEFAULT (datetime('now','localtime')));
@@ -46,6 +47,20 @@ public sealed class AppStore
         var list = new List<StoredMessage>();
         while (r.Read()) list.Add(new StoredMessage(r.GetInt64(0), r.GetString(1), r.GetString(2), r.GetString(3)));
         return list;
+    }
+
+    /// <summary>Sunucu tarafı oturum kaydı: çıkışta silinir, böylece çalınmış/kopyalanmış çerez de geçersiz olur.</summary>
+    public void AddSession(string id) => Exec("INSERT INTO Session (Id) VALUES ($a)", id);
+
+    public bool SessionExists(string id) => Scalar("SELECT 1 FROM Session WHERE Id = $a", id) != null;
+
+    public void RemoveSession(string id) => Exec("DELETE FROM Session WHERE Id = $a", id);
+
+    /// <summary>Sohbeti ve mesajlarını siler. Denetim logu (QueryLog) bilinçli olarak korunur.</summary>
+    public void DeleteChat(string chatId)
+    {
+        Exec("DELETE FROM Message WHERE ChatId = $a", chatId);
+        Exec("DELETE FROM Chat WHERE Id = $a", chatId);
     }
 
     public string? CacheGet(string key)

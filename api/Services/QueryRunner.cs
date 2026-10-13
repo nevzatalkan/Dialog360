@@ -25,6 +25,9 @@ public sealed class QueryRunner(string bankDbPath, SqlGuard guard, SchemaCatalog
         sql = sql.Trim().TrimEnd(';').Trim();
         using var conn = new SqliteConnection($"Data Source={bankDbPath};Mode=ReadOnly;Pooling=False");
         conn.Open();
+        // printf('%900000000c','x') gibi tek bir SELECT'in GB'larca bellek ayırmasını engelle
+        raw.sqlite3_limit(conn.Handle, raw.SQLITE_LIMIT_LENGTH, 1_000_000);
+        raw.sqlite3_limit(conn.Handle, raw.SQLITE_LIMIT_SQL_LENGTH, 20_000);
 
         var check = guard.Validate(conn, sql);
         if (check.Status != GuardStatus.Ok) return new(check.Status, check.Error, null);

@@ -3,6 +3,8 @@
 Türkçe sorulan rapor isteğini veritabanı şemasını bilerek SQL'e çeviren, sorguyu güvenle çalıştıran ve sonucu
 grafik, tablo ve Türkçe özetle sunan sohbet tabanlı raporlama asistanı. Tamamen yerel çalışır (Qwen + llama.cpp).
 
+Ayrıntılı mimari: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · Sıfırdan üretim prompt'u: [docs/REBUILD_PROMPT.md](docs/REBUILD_PROMPT.md)
+
 ## Çalıştırma
 
 Sistem üç parçadan oluşur:
@@ -67,6 +69,12 @@ Model dosyasını indirin (örn. `~/models/` klasörüne). Scriptler modeli `LLM
 
 ```bash
 export LLM_MODEL=~/models/Qwen3-30B-A3B-Instruct-2507-IQ4_XS.gguf
+```
+
+Uygulamaya giriş yapacak **tek kullanıcıyı** oluşturun (kullanıcı adı ve şifre sorulur; şifre en az 8 karakter):
+
+```bash
+cd api && dotnet run -- set-password
 ```
 
 ### Hızlı başlangıç (scriptlerle)
@@ -156,6 +164,12 @@ cd Dialog360
 
 Model dosyasını indirin, örneğin `C:\models\Qwen3-30B-A3B-Instruct-2507-IQ4_XS.gguf`.
 
+Uygulamaya giriş yapacak **tek kullanıcıyı** oluşturun (kullanıcı adı ve şifre sorulur; şifre en az 8 karakter):
+
+```powershell
+cd api; dotnet run -- set-password; cd ..
+```
+
 ### Hızlı başlangıç (scriptlerle)
 
 ```powershell
@@ -232,6 +246,7 @@ cd web; npm install; npm run dev
 Her iki işletim sisteminde aynıdır (Windows PowerShell 5.1'de `&&` yerine `;` kullanın):
 
 ```bash
+cd api && dotnet run -- set-password   # tek kullanıcıyı oluştur / şifre değiştir
 cd api && dotnet run -- seed     # demo verisini bugüne göre yeniden üret (demo gününden önce çalıştırın)
 cd api && dotnet run -- eval     # doğruluk ölçümü (model sunucusu açık olmalı), sonuç eval/results.json
 dotnet test tests                # güvenlik testleri
@@ -241,9 +256,19 @@ dotnet test tests                # güvenlik testleri
 
 | Belirti | Çözüm |
 |---|---|
+| Giriş ekranında "Henüz kullanıcı tanımlı değil" | `dotnet run -- set-password` (api klasöründe) |
+| Şifreyi unuttum / değiştirmek istiyorum | Aynı komutu yeniden çalıştırın; açık oturumların hepsi kapanır |
+| "Çok fazla hatalı deneme" | 5 hatalı denemeden sonra giriş 5 dakika kilitlenir; bekleyin |
 | Arayüzde "Model kapalı · yalnızca önbellek" | Model sunucusu çalışmıyor; daha önce sorulmuş sorular önbellekten cevaplanmaya devam eder |
 | "Geçen ay" gibi sorular boş dönüyor | Veri eski tarihli; `dotnet run -- seed` (api klasöründe) |
 | İlk soru çok yavaş | API açılışındaki ısınma (~20 sn, Windows'ta CPU modunda daha uzun) bitmeden soru sorulmuştur; bir kez bekleyin |
+
+## Kullanım
+
+- **Giriş:** Uygulama tek kullanıcılıdır; `set-password` ile tanımlanan kullanıcı adı ve şifreyle girilir. Sağ üstteki **Çıkış** oturumu sunucuda da sonlandırır.
+- **Geçmiş Sorgularım:** Sol üstteki ☰ menüsü önceki konuşmaları listeler. Bir konuşmaya tıklayınca raporlarıyla birlikte açılır ve
+  kaldığı yerden takip sorusu sorulabilir. Çöp kutusu konuşmayı (onaydan sonra) hem bu tarayıcıdan hem sunucudan siler.
+  Konuşma listesi tarayıcının `localStorage`'ında tutulur.
 
 ## Akış
 
@@ -265,10 +290,13 @@ Soru ──► Önbellek (aynı soru + aynı bağlam) ──► Yerel LLM (JSON 
 
 | Katman | Ne yapar |
 |---|---|
+| Giriş | Tek kullanıcı; şifre PBKDF2-SHA256 (600.000 tur) ile özetlenip `api/Data/auth.json`'da saklanır (repoya girmez). 5 hatalı denemede 5 dk kilit, giriş ucunda dakikada 10 istek sınırı |
+| Oturum | Şifreli `HttpOnly` + `SameSite=Strict` çerez, 8 saat (kayan). Oturum sunucuda da kayıtlıdır: çıkışta ve şifre değişince geçersizleşir. Tüm `/api` uçları girişsiz 401 döner |
+| HTTP başlıkları | CSP (`default-src 'self'`), `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy: no-referrer`, API'de `Cache-Control: no-store` |
 | Bağlantı | Rapor veritabanı `Mode=ReadOnly` ile açılır |
 | SqlGuard | SQLite'ın kendi parser'ı sorguyu derlerken her erişim için authorizer'ı çağırır: yalnızca SELECT, şemadaki tablolar ve izinli fonksiyonlar geçer; INSERT/UPDATE/DELETE/DROP/PRAGMA/ATTACH reddedilir; tek ifade ve `sqlite3_stmt_readonly` kontrol edilir |
 | KVKK | PII kolonları (`schema.notes.json`'da `"pii": true`) SELECT, WHERE, JOIN dahil hiçbir yerde okunamaz; LLM'e satır verisi gönderilmez |
-| Çalıştırma | 15 sn zaman aşımı (progress handler), 1000 satır limiti, sorgu planında index'siz büyük tablo taraması uyarısı |
+| Çalıştırma | 15 sn zaman aşımı (progress handler), 1000 satır limiti, 1 MB metin/değer sınırı, sorgu planında index'siz büyük tablo taraması uyarısı |
 | Denetim | Her soru, SQL, süre, deneme sayısı `app.db` → `QueryLog` tablosunda |
 
 SQL panelindeki **"SQL'i düzenle ve çalıştır"** ile `DELETE FROM Musteri` yazıp doğrulayıcının engellediği canlı gösterilebilir.
