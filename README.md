@@ -33,7 +33,7 @@ Yerel API, `DefaultAzureCredential` kullanır; Azure CLI/Developer CLI oturumunu
 
 ### Azure dağıtımı
 
-`azure.yaml` uygulama API'sinin container imajını ACR üzerinde remote build edecek şekilde ayarlıdır; yerel makinede Docker/Podman gerekmez. Hosted Agent ise AZD'nin .NET code deployment akışıyla paketlenir. `azd provision --preview --no-prompt` yalnızca önizleme yapar; kaynakları oluşturmaz. Doğrulama tamamlandıktan sonra:
+`azure.yaml` API container imajını ACR üzerinde remote build edecek şekilde ayarlıdır; bu yol ACR Tasks'ın abonelikte etkin ve kullanılabilir olmasını gerektirir. ACR `TasksOperationsNotAllowed` döndürürse remote build kullanılamaz; Azure yöneticisinden ACR Tasks etkinleştirmesini isteyin veya Docker/Podman kurup API servisini yerel build'e geçirin. Hosted Agent ise AZD'nin .NET code deployment akışıyla paketlenir. İlk dağıtımda, Container App'in ACR'de henüz bulunmayan bir imaj etiketini çekmeye çalışmadığını ve `AcrPull` rol atamasının deploy öncesinde yayıldığını doğrulayın. `azd provision --preview --no-prompt` yalnızca önizleme yapar; kaynakları oluşturmaz. Doğrulama tamamlandıktan sonra:
 
 ```powershell
 azd provision --no-prompt

@@ -46,7 +46,7 @@ Use this skill for Azure and Microsoft Foundry work in the Dialog360 repository.
    `az quota list` may return `BadRequest` for `Microsoft.CognitiveServices`; when that happens, use the Cognitive Services model and usage commands instead. Confirm that the configured SKU, model version, feature support, and capacity remain available.
 5. Run `azd provision --preview --no-prompt` and resolve all infrastructure or policy errors before creating resources.
 6. Build and test the API, agent, and UI. Verify the root API Dockerfile's `web/package-lock.json` input and confirm its listening port matches the Container Apps ingress target port.
-7. Run `azd package --no-prompt`. The API uses ACR remote build so a local Docker/Podman installation is not required. Keep the API service configured as a Docker language service with its source `project` and Dockerfile; do not set `image` as well, because `image` means an already-built source image and conflicts with `project`.
+7. Run `azd package --no-prompt`. The API uses ACR remote build when ACR Tasks are enabled for the subscription. Keep the API service configured as a Docker language service with its source `project` and Dockerfile; do not set `image` as well, because `image` means an already-built source image and conflicts with `project`.
 8. Inspect Bicep role assignments: the API identity needs `AcrPull` on the registry and `Foundry Agent Consumer` on the Foundry project. The Foundry project identity needs `AcrPull` only when the agent image path requires it. Keep scopes least-privilege.
 9. Complete `azure-validate` and ensure `.azure/deployment-plan.md` has status `Validated` and actual validation evidence before deployment.
 
@@ -72,6 +72,8 @@ Provision and deploy as separate operations when Container Apps uses ACR. After 
 
 ## Operational constraints
 
+- Before the first API Container App revision, ensure the image tag exists in ACR and the app identity's `AcrPull` assignment is effective. Use a bootstrap image/path if infrastructure must create the identity and role assignment before deploying the private API image; do not repeatedly provision against a missing private tag.
+- If ACR remote build returns `TasksOperationsNotAllowed`, stop retrying the same build command. Ask the subscription/registry administrator to enable ACR Tasks, or install Docker/Podman and switch the API service to a local build before packaging and pushing the image.
 - `AZURE_DEV_USER_AGENT=microsoft_foundry_skill` is local-only and must be set inline/in-process for AZD commands, never added to committed files.
 - Do not place secrets, API keys, or user-specific identity IDs in source or this skill.
 - Do not weaken SQL validation, expose the agent endpoint to the browser, or grant broad project/resource-group permissions to the API identity.
