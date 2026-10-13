@@ -118,6 +118,34 @@ public sealed class SqlGuardTests(DemoDbFixture db) : IClassFixture<DemoDbFixtur
     }
 
     [Fact]
+    public void Ses_on_metni_alan_terimlerini_icerir_kisisel_veri_icermez()
+    {
+        var vocabulary = SpeechVocabulary.Build(db.Catalog);
+        Assert.Contains("Alsancak", vocabulary);
+        Assert.Contains("KOBİ", vocabulary);
+        Assert.Contains("Platinum", vocabulary);
+        Assert.True(vocabulary.Length < 800, "Whisper ön metni kısa kalmalı");
+        // Gerçek müşteri adları (PII) ön metne sızmamalı
+        using var conn = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={db.DbPath};Mode=ReadOnly;Pooling=False");
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT DISTINCT AdSoyad FROM Musteri LIMIT 200";
+        using var r = cmd.ExecuteReader();
+        int checkedNames = 0;
+        while (r.Read()) { Assert.DoesNotContain(r.GetString(0), vocabulary); checkedNames++; }
+        Assert.True(checkedNames > 50);
+    }
+
+    [Fact]
+    public void Wav_dogrulamasi_yalnizca_riff_wave_kabul_eder()
+    {
+        var header = "RIFF\0\0\0\0WAVE"u8.ToArray();
+        Assert.True(Wav.LooksValid([.. header, .. new byte[40]]));
+        Assert.False(Wav.LooksValid("ID3 fake mp3 content that is long enough to pass length"u8.ToArray()));
+        Assert.False(Wav.LooksValid(header));
+    }
+
+    [Fact]
     public void Sema_prompt_metni_pii_isaretli_ve_degerleri_icerir()
     {
         Assert.Matches(new Regex(@"AdSoyad TEXT \[KİŞİSEL VERİ"), db.Catalog.PromptText);

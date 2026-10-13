@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { api, auth, UNAUTHORIZED_EVENT, type HistoryItem } from './api'
+import { api, auth, UNAUTHORIZED_EVENT, type Health, type HistoryItem } from './api'
 import { HistoryDrawer } from './components/HistoryDrawer'
 import { LogoutIcon, MenuIcon } from './components/icons'
+import { MicButton } from './components/MicButton'
 import { Login } from './components/Login'
 import { AssistantMessage, MANUAL_SQL_PREFIX, UserMessage } from './components/MessageView'
 import { SchemaPanel } from './components/SchemaPanel'
@@ -50,7 +51,8 @@ function ChatApp({ username, onLogout }: { username: string; onLogout: () => voi
   const [input, setInput] = useState('')
   const [pending, setPending] = useState<{ text: string; started: number } | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [health, setHealth] = useState<{ llm: boolean; model: string } | null>(null)
+  const [health, setHealth] = useState<Health | null>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
   const [showSchema, setShowSchema] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
 
@@ -205,9 +207,12 @@ function ChatApp({ username, onLogout }: { username: string; onLogout: () => voi
 
         <footer className="border-t border-slate-200 bg-white px-6 py-4">
           <form onSubmit={e => { e.preventDefault(); send(input) }} className="mx-auto flex max-w-5xl gap-2">
-            <input value={input} onChange={e => setInput(e.target.value)} disabled={!!pending} autoFocus
+            <input ref={inputRef} value={input} onChange={e => setInput(e.target.value)} disabled={!!pending} autoFocus
               placeholder={items.length ? 'Takip sorusu sorun: "Bunu şubelere göre kır", "Sadece Premium müşteriler"…' : 'Örn. Geçen ay sektörlere göre toplam kart harcaması'}
               className="flex-1 rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 disabled:bg-slate-50" />
+            <MicButton available={!!health?.speech} disabled={!!pending}
+              onText={text => { setError(null); setInput(prev => (prev.trim() ? `${prev.trim()} ${text}` : text)); inputRef.current?.focus() }}
+              onError={setError} />
             <button disabled={!!pending || !input.trim()} className="rounded-xl bg-indigo-600 px-5 font-medium text-white hover:bg-indigo-700 disabled:opacity-40">
               Sor
             </button>

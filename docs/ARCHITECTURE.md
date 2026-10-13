@@ -32,7 +32,7 @@ takip sorusuyla rapor daraltılır, belirsiz soruda sistem geri soru sorar, üre
 | Salt-okuma doğrulaması, KVKK kolon engeli, denetim logu | Veri yazma/güncelleme |
 | Otomatik grafik, Türkçe özet, CSV dışa aktarma | Aynı anda birden fazla veritabanı |
 | Elle SQL düzenleyip çalıştırma (aynı doğrulamayla) | Model fine-tuning |
-| Tek kullanıcılı giriş/çıkış, Geçmiş Sorgularım menüsü | Çok kullanıcı, kullanıcı yönetim ekranı |
+| Tek kullanıcılı giriş/çıkış, Geçmiş Sorgularım menüsü, sesle soru (Türkçe) | Çok kullanıcı, kullanıcı yönetim ekranı |
 | Tamamen yerel çalışma (internet gerekmez) | Bulut dağıtımı |
 
 **Temel ilke:** LLM yalnızca SQL *önerir*; neyin çalışacağına LLM'den bağımsız, deterministik kod karar verir.
@@ -61,6 +61,7 @@ flowchart LR
         GUARD --> CAT
     end
 
+    API -->|POST /inference, WAV| STT["whisper-server :18090<br/>large-v3-turbo (ya da Azure AI Speech)"]
     LLMC -->|OpenAI uyumlu /v1/chat/completions| LLM["llama-server :18080<br/>Qwen3-30B-A3B-Instruct-2507"]
     RUN -->|Mode=ReadOnly| BANK[("bank.db<br/>rapor verisi")]
     CAT -->|şema okuma| BANK
@@ -72,6 +73,7 @@ flowchart LR
 |---|---|---|
 | Önyüz | React 19, TypeScript, Vite, Tailwind CSS 4, Recharts | Sohbet, rapor kartı, SQL paneli, veri kataloğu |
 | API | .NET 10 Minimal API, Microsoft.Data.Sqlite (SQLitePCLRaw) | Akış yönetimi, doğrulama, çalıştırma, raporlama |
+| Ses tanıma (opsiyonel) | whisper.cpp `whisper-server` + `ggml-large-v3-turbo-q5_0` ya da Azure AI Speech | Konuşma → Türkçe metin |
 | Model sunucusu | llama.cpp `llama-server`, Qwen3-30B-A3B-Instruct-2507 (IQ4_XS GGUF) | Soru → yapılandırılmış JSON (SQL, açıklama, netleştirme) |
 | Rapor veritabanı | SQLite `api/Data/bank.db` | Banka demo verisi; yalnızca okunur |
 | Uygulama veritabanı | SQLite `api/Data/app.db` (WAL) | Sohbet geçmişi, LLM cevap önbelleği, denetim logu |
@@ -88,6 +90,7 @@ Tüm `/api` uçları giriş gerektirir (girişsiz 401); yalnızca `/api/auth/*` 
 | `POST /api/chat` `{chatId?, message}` | Ana akış. Cevap: `report` · `clarify` · `blocked` · `error` |
 | `POST /api/sql` `{chatId?, sql}` | Elle düzenlenen SQL'i LLM'siz, aynı doğrulamadan geçirerek çalıştırır |
 | `GET /api/history/{chatId}` | Sohbet geçmişi (kullanıcı metinleri + kayıtlı cevaplar) |
+| `POST /api/speech` (multipart `audio`, WAV ≤5 MB, `X-Diyalog360: 1` başlığı) | Sesi yazıya döker: `{text, provider, durationMs}`; sağlayıcı kapalıysa 503 |
 | `DELETE /api/chats/{chatId}` | Sohbeti ve mesajlarını siler (denetim logu korunur) |
 | `GET /api/schema` | Veri kataloğu (tablo, kolon, tip, PK/FK, açıklama, PII, değer listeleri) |
 | `GET /api/health` | Model sunucusu erişilebilir mi, model adı, tablo sayısı |
@@ -164,6 +167,7 @@ sequenceDiagram
 | **ReportBuilder** | Grafik seçimi ve Türkçe özet — **LLM kullanmaz** | Bkz. aşağı |
 | **AppStore** | `app.db` erişimi | `Chat`, `Message`, `LlmCache`, `QueryLog`, `Session` |
 | **AuthService** | Tek kullanıcılı kimlik doğrulama | PBKDF2-SHA256 (600.000 tur, 16 bayt tuz), sabit süreli karşılaştırma (kullanıcı adı yanlışsa da şifre özeti hesaplanır), 5 hatalı denemede 5 dk kilit, `auth.json` parmak izi (`Stamp`) |
+| **SpeechToText** | Sesle soru | `ISpeechToText`: `WhisperSpeechToText` (yerel), `AzureSpeechToText` (kısa ses REST, anahtar sunucuda), `DisabledSpeechToText`; `Speech:Provider` ile seçilir. `SpeechVocabulary` katalog değerlerinden cümle biçiminde ön metin üretir (Whisper ön metnin yazım tarzını taklit ettiği için düz büyük harfli liste yerine "Şube adı: Kadıköy, Alsancak." biçimi) |
 | **EvalRunner** | Doğruluk ölçümü | Bkz. [§9](#9-kalite-test-ve-eval) |
 | **DemoSeeder** (`Data/`) | Demo veritabanını üretir | Sabit tohum (`Random(360)`), tarihler üretim anına göre göreli |
 
@@ -238,13 +242,25 @@ tutulur. Böylece kolon adları her zaman veritabanıyla tutarlı kalır.
 
 JSON şeması `strict` olarak gönderilir; llama-server bunu grammar'a çevirir, böylece çıktı her zaman ayrıştırılabilir.
 
+### Ses tanıma hataları
+`system.md`'deki kural, anlamsız kelimeleri en yakın şema/sözlük terimine göre yorumlatır ve düzeltmeyi varsayımlara yazdırır
+("yadeleri" → iade). Gerçek bir belirsizlik varsa ("ya da tutarı") model netleştirme sorar.
+
 ### Takip soruları ve netleştirme
 - Geçmişteki son SQL modele verilir. "Bunu İstanbul şubeleri için aylık göster" gibi bir mesajda model önceki SQL'i değiştirir.
 - Netleştirme seçeneğine tıklamak normal bir kullanıcı mesajı gönderir. Geçmişte netleştirme sorusu bulunduğu için model seçimi önceki soruyla birleştirir.
 
 ### Sağlayıcı bağımsızlığı
 `LlmClient` OpenAI uyumlu herhangi bir uçla çalışır. `appsettings.json` → `Llm:BaseUrl/Model/ApiKey` değiştirilip
-`LlamaCachePrompt=false` yapılarak Azure OpenAI vb. bir servise geçilebilir.
+`LlamaCachePrompt=false` yapılarak Azure OpenAI vb. bir servise geçilebilir (`LlamaCachePrompt=false` iken açılış ısınması da
+atlanır; uzak API'de KV önbelleği yoktur, ısınma yalnızca kota harcar). Servisin `/models` ucu yoksa sağlık kontrolü için
+`Llm:HealthUrl` verilir.
+
+| Ortam | LLM | Ses tanıma |
+|---|---|---|
+| Yerel (macOS/Windows) | llama-server + Qwen3-30B-A3B | whisper-server (opsiyonel) |
+| GitHub Codespaces (`scripts/codespace.sh`, `.devcontainer/`) | GitHub Models (`openai/gpt-4.1-mini`, Codespaces'in `GITHUB_TOKEN`'ı) | Kapalı (`Speech__Provider=None`) |
+| Azure | Azure OpenAI / Foundry (`.../openai/v1`) | Azure AI Speech (`Speech:Provider=AzureSpeech`) |
 
 ---
 
@@ -363,7 +379,9 @@ web/src/
     SchemaPanel.tsx     veri kataloğu (PK, FK, KVKK etiketleri, değer listeleri)
     Login.tsx           giriş formu (kullanıcı tanımlı değilse yönerge gösterir)
     HistoryDrawer.tsx   soldan açılan "Geçmiş Sorgularım" menüsü; seç, yeni sohbet, çöp kutusu + onay ile sil
+    MicButton.tsx       bas-konuş-bas mikrofon butonu (kayıt süresi, 30 sn sınır, tanıma sırasında bekleme)
     icons.tsx           satır içi SVG ikonlar
+  recorder.ts           mikrofon → 16 kHz mono PCM WAV (sunucuda ffmpeg gerekmez)
 ```
 
 **Geçmiş Sorgularım akışı:** Her cevaptan sonra konuşma `localStorage`'a yazılır (başlık = ilk soru). Menüden açılınca
@@ -380,12 +398,13 @@ gönderildiği için sunucu önceki SQL'leri bağlam olarak kullanır, yani konu
 
 | Araç | Ne ölçer | Nasıl |
 |---|---|---|
-| `tests/` (xUnit, 36 test) | Güvenlik ve geçerlilik | **Giriş:** doğru/yanlış bilgi, şifrenin açık metin saklanmaması, kısa şifre reddi, kilitlenme ve süre dolunca açılma. **SQL:** Geçici bir demo DB üretilir. Okuma sorgularının geçtiği; yazma, PRAGMA, ATTACH ve ikinci ifadenin engellendiği; PII'nin SELECT, WHERE ve `*` içinde yakalandığı; bellek tüketen metin üretiminin reddi; satır limiti, plan uyarısı ve **`examples.md`'deki tüm SQL'lerin gerçekten çalışıp sonuç döndürdüğü** doğrulanır |
+| `tests/` (xUnit, 38 test) | Güvenlik ve geçerlilik | **Ses:** ön metnin alan terimlerini içermesi ve gerçek müşteri adlarını (PII) içermemesi, WAV doğrulaması. **Giriş:** doğru/yanlış bilgi, şifrenin açık metin saklanmaması, kısa şifre reddi, kilitlenme ve süre dolunca açılma. **SQL:** Geçici bir demo DB üretilir. Okuma sorgularının geçtiği; yazma, PRAGMA, ATTACH ve ikinci ifadenin engellendiği; PII'nin SELECT, WHERE ve `*` içinde yakalandığı; bellek tüketen metin üretiminin reddi; satır limiti, plan uyarısı ve **`examples.md`'deki tüm SQL'lerin gerçekten çalışıp sonuç döndürdüğü** doğrulanır |
 | `eval/questions.json` (24 soru) | Uçtan uca doğruluk | Önbelleksiz çalışır. `rapor` sorularında üretilen sonuç, beklenen SQL'in sonucuyla karşılaştırılır: satır sayısı eşit olmalı ve beklenen her satırın değerleri bir satırda bulunmalı (kolon adı ve sırasından bağımsız, sayılar 0,1'e yuvarlanır). `netlestirme` ve `ret` sorularında yalnızca cevap türü kontrol edilir. Takip soruları `onceki` alanıyla aynı sohbette sorulur |
 
-Son tam koşu: **23/24 (%96)**. Doğru gelen cevapların hepsi tek denemede geldi. Hataların tamamı kod değişikliği
-gerektirmedi; sözlük ve kural metinleri düzeltilerek giderildi (örnek: "işlem sayısı iadeleri de kapsar", "kampanya
-harcaması = kampanyanın sektörü + tarihleri").
+Son tam koşu: **24/24 (%100)**, her cevap tek denemede (yerel Qwen3-30B-A3B). Gelişim: ilk koşu 21/24 → 23/24 → 24/24.
+Hataların tamamı kod değişikliği gerektirmedi; sözlük ve kural metinleri düzeltilerek giderildi (örnek: "işlem sayısı
+iadeleri de kapsar", "kampanya harcaması = kampanyanın sektörü + tarihleri", "döviz hesabı = HesapTuru", "OR'lu koşulları
+paranteze al"). Model ve prompt deterministik olmadığı için her prompt değişikliğinden sonra tam set yeniden koşturulmalıdır.
 
 **İyileştirme döngüsü:** eval → başarısız soruyu incele → `glossary.md`, `system.md` ya da `examples.md`'yi düzelt → eval.
 
@@ -400,10 +419,18 @@ harcaması = kampanyanın sektörü + tarihleri").
 | `Urls` | `http://localhost:5080` |
 | `Llm:BaseUrl` / `Model` / `ApiKey` | `http://127.0.0.1:18080/v1` / `qwen3-30b-a3b-instruct-2507` / — |
 | `Llm:Temperature` / `MaxTokens` / `TimeoutSeconds` | `0` / `900` / `240` |
-| `Llm:LlamaCachePrompt` | `true` |
+| `Llm:LlamaCachePrompt` / `HealthUrl` | `true` / — (boşsa `{BaseUrl}/models`) |
+| `Speech:Provider` | `Whisper` (`AzureSpeech` · `None`) |
+| `Speech:Language` / `WhisperUrl` | `tr` / `http://127.0.0.1:18090` |
+| `Speech:AzureRegion` / `AzureKey` | — / — (anahtarı user-secrets ya da `Speech__AzureKey` ortam değişkeniyle verin) |
+| `Auth:SessionHours` | `8` |
 | `Query:MaxRows` / `TimeoutSeconds` | `1000` / `15` |
 
 llama-server: `--ctx-size 8192 --parallel 1 --n-gpu-layers 99 --flash-attn on --cache-type-k q8_0 --cache-type-v q8_0 --jinja`.
+whisper-server: `-m ggml-large-v3-turbo-q5_0.bin --host 127.0.0.1 --port 18090` (dil ve ön metin her istekte gönderilir).
+
+Üretilen dosyalar (repoya girmez): `Data/bank.db`, `Data/app.db`, `Data/auth.json`, `Data/keys/`, `Data/prompt.generated.md`,
+`Data/speech-prompt.generated.txt`, `wwwroot/`.
 Çalıştırma adımları macOS ve Windows için [README](../README.md)'de.
 
 **Gözlenen performans** (Apple M4, 24 GB):
@@ -413,6 +440,8 @@ llama-server: `--ctx-size 8192 --parallel 1 --n-gpu-layers 99 --flash-attn on --
 | Açılışta sistem prompt'unun ısınması | ~22 sn (4.800 token, ~140 token/sn) |
 | Yeni soru (model) | 5–20 sn (üretim ~29 token/sn) |
 | Önbellekteki soru | < 100 ms |
+| Ses → metin (3,5–4,6 sn konuşma, Whisper, Qwen ile aynı anda) | 1,1–1,6 sn |
+| Bellek: Qwen / Qwen + Whisper | 17,9 GB / 18,9 GB sabit ayrılan; sistemde boş %13 / %7 |
 | Sorgu çalıştırma (157 bin işlem) | Genellikle < 50 ms |
 
 ---
@@ -429,7 +458,9 @@ llama-server: `--ctx-size 8192 --parallel 1 --n-gpu-layers 99 --flash-attn on --
 | Join yolu | FK grafında BFS | İlişkiler prompt'ta açıkça listeli + few-shot | 9 tablo için yeterli ve daha az kod |
 | Şema seçimi | >30 tabloda embedding ile seçim | Tüm şema prompt'ta | Demo DB 9 tablo |
 | Önbellek | Nice-to-have | Çekirdek özellik | Demo dayanıklılığı (model kapalıyken de çalışır) |
-| Paketleme | Docker Compose | Scriptler (`.sh` / `.ps1`) | Model GPU'yu doğrudan kullanmalı |
+| Paketleme | Docker Compose | Scriptler (`.sh` / `.ps1`) + Codespaces devcontainer | Model GPU'yu doğrudan kullanmalı; Codespaces kurulumsuz deneme için |
+| Kimlik doğrulama | Kapsam dışı | Tek kullanıcılı giriş + sunucu tarafı oturum | Uygulama gerçek veriye bağlanabilecek şekilde korunmalı |
+| Girdi | Yalnızca yazı | Yazı + sesle soru (Whisper / Azure Speech) | Kullanım kolaylığı; demo etkisi |
 
 ---
 
@@ -455,4 +486,9 @@ llama-server: `--ctx-size 8192 --parallel 1 --n-gpu-layers 99 --flash-attn on --
 | Tüm şema prompt'ta | Yüzlerce tabloluk şemada bağlam ve doğruluk sorunu | Soruya göre tablo seçimi (embedding + FK komşuluğu) |
 | Toplu istatistiklerden çıkarım | PII kolonu okunamaz, ama çok dar filtrelerle tek bir kişiye ait toplamlar görülebilir | Minimum grup büyüklüğü kuralı (k-anonimlik) |
 | Demo verisi tarihe göreli | Günler geçtikçe "geçen ay" kayar | Demo öncesi `dotnet run -- seed` |
+| Sesle soruda canlı yazı yok | Metin konuşma bitince gelir (1–2 sn) | Azure Speech SDK ile akışlı tanıma |
+| Ses testleri sentetik sesle yapıldı | macOS "Yelda" sesiyle ölçüldü; "iade" kelimesi bu seste "yade" duyuldu (LLM kuralıyla düzeltiliyor) | Gerçek kullanıcı kayıtlarıyla küçük bir ses eval seti |
+| Azure Speech ve Azure OpenAI denenmedi | Kod hazır, anahtar olmadığı için uçtan uca test edilmedi | İlk Azure kurulumunda `eval` ve ses testi koşturmak |
+| Bellek | Qwen + Whisper ile 24 GB makinede sistemde ~%7 boş bellek kalır | Demo sırasında diğer uygulamaları kapatmak; gerekirse Whisper'ı yalnızca kullanımda açmak |
+| Mevcut kod SQLite'a bağlı | Azure SQL için `IReportDatabase` ayrımı yalnızca [REBUILD_PROMPT](REBUILD_PROMPT.md)'ta tanımlı | Sağlayıcı arayüzünü mevcut koda uygulamak |
 | Demo verisinde iptal edilmiş kartlarda da işlem var | Gerçekçilik açısından küçük tutarsızlık | Seeder'da iptal tarihinden sonraki işlemleri kesmek |

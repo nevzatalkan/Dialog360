@@ -39,6 +39,8 @@ export interface ChatResponse {
   meta: Meta
 }
 
+export interface Health { llm: boolean; model: string; tables: number; speech: boolean; speechProvider: string }
+
 export type HistoryItem = { role: 'user'; text: string } | { role: 'assistant'; response: ChatResponse }
 
 export interface ColumnInfo {
@@ -76,7 +78,13 @@ export const api = {
   history: (chatId: string) => fetch(`/api/history/${encodeURIComponent(chatId)}`).then(r => json<HistoryItem[]>(r)),
   deleteChat: (chatId: string) => fetch(`/api/chats/${encodeURIComponent(chatId)}`, { method: 'DELETE' }).then(r => json<void>(r)),
   schema: () => fetch('/api/schema').then(r => json<TableInfo[]>(r)),
-  health: () => fetch('/api/health').then(r => json<{ llm: boolean; model: string; tables: number }>(r)),
+  health: () => fetch('/api/health').then(r => json<Health>(r)),
+  transcribe: (wav: Blob) => {
+    const form = new FormData()
+    form.append('audio', wav, 'ses.wav')
+    return fetch('/api/speech', { method: 'POST', body: form, headers: { 'X-Diyalog360': '1' } })
+      .then(r => json<{ text: string; provider: string; durationMs: number }>(r))
+  },
 }
 
 /** Giriş uçları: 401 burada beklenen bir cevaptır, global olay tetiklenmez. */

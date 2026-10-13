@@ -6,6 +6,7 @@ using Diyalog360.Api.Services;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 
 // Kullanım:
@@ -51,6 +52,22 @@ builder.Services.AddSingleton(new QueryRunner(bankDb, guard, catalog,
 builder.Services.AddSingleton(new AppStore(Path.Combine(dataDir, "app.db")));
 builder.Services.AddSingleton(new AuthService(authFile));
 builder.Services.AddHttpClient<LlmClient>(c => c.Timeout = Timeout.InfiniteTimeSpan);
+
+// Sesle soru: Speech:Provider = Whisper (yerel whisper.cpp) | AzureSpeech | None
+var speechOptions = builder.Configuration.GetSection("Speech").Get<SpeechOptions>() ?? new SpeechOptions();
+var speechVocabulary = SpeechVocabulary.Build(catalog);
+File.WriteAllText(Path.Combine(dataDir, "speech-prompt.generated.txt"), speechVocabulary);
+builder.Services.AddHttpClient("speech", c => c.Timeout = TimeSpan.FromSeconds(speechOptions.TimeoutSeconds));
+builder.Services.AddSingleton<ISpeechToText>(sp =>
+{
+    var http = sp.GetRequiredService<IHttpClientFactory>().CreateClient("speech");
+    return speechOptions.Provider.ToLowerInvariant() switch
+    {
+        "whisper" => new WhisperSpeechToText(http, speechOptions, speechVocabulary),
+        "azurespeech" => new AzureSpeechToText(http, speechOptions),
+        _ => new DisabledSpeechToText(),
+    };
+});
 builder.Services.AddTransient<ChatOrchestrator>();
 builder.Services.AddTransient<EvalRunner>();
 
@@ -191,10 +208,33 @@ api.MapDelete("/chats/{chatId}", (string chatId, AppStore store) =>
     return Results.NoContent();
 });
 
+api.MapPost("/speech", async (HttpRequest request, ISpeechToText stt, CancellationToken ct) =>
+{
+    // Çapraz site form gönderimi özel başlık ekleyemez: SameSite çereze ek CSRF katmanı
+    if (request.Headers["X-Diyalog360"] != "1") return Results.BadRequest(new { error = "Eksik istek başlığı." });
+    if (!request.HasFormContentType) return Results.BadRequest(new { error = "Ses kaydı multipart/form-data olarak gönderilmeli." });
+    var file = (await request.ReadFormAsync(ct)).Files["audio"];
+    if (file is null || file.Length is 0 or > 5_000_000) return Results.BadRequest(new { error = "Ses kaydı 0-5 MB arasında olmalı." });
+    using var buffer = new MemoryStream();
+    await file.CopyToAsync(buffer, ct);
+    var wav = buffer.ToArray();
+    if (!Wav.LooksValid(wav)) return Results.BadRequest(new { error = "Ses kaydı WAV biçiminde olmalı." });
+    try
+    {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var text = await stt.TranscribeAsync(wav, ct);
+        return Results.Ok(new { text, provider = stt.Name, durationMs = sw.ElapsedMilliseconds });
+    }
+    catch (SpeechUnavailableException ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: 503);
+    }
+}).WithMetadata(new RequestSizeLimitAttribute(6_000_000));
+
 api.MapGet("/schema", (SchemaCatalog c) => c.Tables);
 
-api.MapGet("/health", async (LlmClient llm, SchemaCatalog c, CancellationToken ct) =>
-    new { llm = await llm.IsHealthyAsync(ct), model = llm.Model, tables = c.Tables.Count });
+api.MapGet("/health", async (LlmClient llm, ISpeechToText stt, SchemaCatalog c, CancellationToken ct) =>
+    new { llm = await llm.IsHealthyAsync(ct), model = llm.Model, tables = c.Tables.Count, speech = await stt.IsHealthyAsync(ct), speechProvider = stt.Name });
 
 app.MapFallbackToFile("index.html");
 

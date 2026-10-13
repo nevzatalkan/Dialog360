@@ -7,6 +7,7 @@
 - X kart sahibi = KartTipi = 'X' olan en az bir kartı bulunan müşteri; sayarken COUNT(DISTINCT m.Id)
 - Mevduat / toplam bakiye = SUM(Hesap.Bakiye), Durum = 'Aktif' ve ParaBirimi = 'TRY' (döviz bakiyeleri TL ile toplanmaz)
 - Ürün sayısı = müşterinin MusteriUrun kayıt sayısı
+- Döviz hesabı = HesapTuru = 'Döviz' (para birimine göre değil); TL hesabı = ParaBirimi = 'TRY'
 - Kart ve hesap sayımları ("kart sayısı", "X hesabı olan müşteri") = kullanıcı aksini söylemedikçe yalnızca Durum = 'Aktif' kayıtlar; bunu varsayımlara yaz
 - Şube, şehir, il, bölge → Sube tablosu (Ad, Sehir, Bolge). Müşterinin şubesi Musteri.SubeId'dir; bir işlemin şubesi, işlemi yapan kartın müşterisinin şubesidir (Islem → Kart → Musteri → Sube)
 - Yaş = CAST(strftime('%Y','now') AS INTEGER) - Musteri.DogumYili

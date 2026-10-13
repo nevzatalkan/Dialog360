@@ -24,3 +24,11 @@ export const PlusIcon = () => (
 export const CloseIcon = () => (
   <svg {...base} width={18} height={18}><path d="M18 6 6 18M6 6l12 12" /></svg>
 )
+
+export const MicIcon = () => (
+  <svg {...base}><path d="M9 5a3 3 0 0 1 6 0v6a3 3 0 0 1-6 0zM5 10a7 7 0 0 0 14 0M8 21h8M12 17v4" /></svg>
+)
+
+export const StopIcon = () => (
+  <svg {...base} width={14} height={14}><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" stroke="none" /></svg>
+)

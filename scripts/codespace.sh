@@ -8,6 +8,7 @@ export Llm__BaseUrl="${Llm__BaseUrl:-https://models.github.ai/inference}"
 export Llm__Model="${Llm__Model:-openai/gpt-4.1-mini}"
 export Llm__ApiKey="${Llm__ApiKey:-${GH_MODELS_TOKEN:-${GITHUB_TOKEN:-}}}"
 export Llm__LlamaCachePrompt=false
+export Speech__Provider="${Speech__Provider:-None}"   # Codespaces'te yerel whisper yok; mikrofon butonu pasif görünür
 if [[ -z "${Llm__HealthUrl:-}" && "$Llm__BaseUrl" == https://models.github.ai/* ]]; then
   export Llm__HealthUrl=https://models.github.ai/catalog/models
 fi

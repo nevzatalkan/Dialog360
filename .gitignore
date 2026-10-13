@@ -13,6 +13,7 @@ api/Data/*.db
 api/Data/*.db-shm
 api/Data/*.db-wal
 api/Data/prompt.generated.md
+api/Data/speech-prompt.generated.txt
 eval/results.json
 
 .DS_Store

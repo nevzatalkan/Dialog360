@@ -37,7 +37,11 @@ Tarayıcı ──HTTP──► API ─► ChatOrchestrator ─► PromptBuilder 
    Ayarlar: `BaseUrl`, `Model` (Azure'da deployment adı), `ApiKey` veya `UseEntraId` (`DefaultAzureCredential`, kapsam
    `https://cognitiveservices.azure.com/.default`), `LlamaCachePrompt` (yalnızca llama-server). Yerel: `http://127.0.0.1:18080/v1`
    (Qwen3-30B-A3B-Instruct GGUF). Azure: `https://<kaynak>.openai.azure.com/openai/v1`. Ajan servisi kullanma; akış kendi kodumuzda.
-3. **Lehçeye göre prompt:** `Prompt/{sqlite|tsql}/system.md` ve `examples.md` (tarih kalıpları, `LIMIT`/`TOP`); `glossary.md` ve
+3. `ISpeechToText` (sesle soru) — `Speech:Provider`: **Whisper** (yerel `whisper-server`, `ggml-large-v3-turbo-q5_0`, istekte
+   `language=tr` + katalog değerlerinden cümle biçiminde ön metin) | **AzureSpeech** (kısa ses REST, anahtar sunucuda) | **None**.
+   Tarayıcı kaydı 16 kHz mono WAV'a çevirir (ffmpeg gerekmez); `POST /api/speech` (giriş + özel başlık); metin soru kutusuna yazılır,
+   otomatik gönderilmez. Sistem prompt'una "ses/yazım hatalarını en yakın terimle yorumla, varsayımlara yaz" kuralı eklenir.
+4. **Lehçeye göre prompt:** `Prompt/{sqlite|tsql}/system.md` ve `examples.md` (tarih kalıpları, `LIMIT`/`TOP`); `glossary.md` ve
    `schema.notes.json` (Türkçe açıklamalar, `"pii": true`) ortak.
 
 `appsettings.json`: `ReportDb: { Provider: "Sqlite" | "AzureSql", ConnectionString }`, `Llm: { BaseUrl, Model, ApiKey, UseEntraId, LlamaCachePrompt }`,
@@ -50,6 +54,7 @@ Tarayıcı ──HTTP──► API ─► ChatOrchestrator ─► PromptBuilder 
    + iş sözlüğü + doğrulanmış örnekler. Bugünün tarihini yazma; SQL'de `date('now')`/`GETDATE()` kullan (önek önbelleği bozulmasın).
    Açılışta bir ısınma çağrısı yap.
 3. LLM tek çağrıda JSON döner: `{tur: rapor|netlestirme|ret, baslik, sql, aciklama, varsayimlar[], netlestirme_sorusu, secenekler[]}`.
+   Prompt kuralları: SQL lehçesi, tarih kalıpları, PII yasağı, OR'lu koşullarda parantez, ses/yazım hatalarını en yakın terimle yorumlama.
 4. `rapor` → Validate → Execute. `Invalid` ise hata mesajını LLM'e geri ver, en fazla 2 düzeltme. `Forbidden` ise düzeltme deneme,
    "engellendi" kartı + durduran katman. Model kapalıysa önbellekten cevap ver.
 5. ReportBuilder: kural tabanlı grafik (1 satır→KPI; tarih+sayı→çizgi; tarih+kategori+sayı→çok serili; kategori+sayı≤30→çubuk;
@@ -69,12 +74,12 @@ Tarayıcı ──HTTP──► API ─► ChatOrchestrator ─► PromptBuilder 
 ## API
 
 `POST /api/auth/login|logout`, `GET /api/auth/me`, `POST /api/chat {chatId?, message}`, `POST /api/sql {chatId?, sql}` (elle düzenlenen SQL,
-aynı doğrulama), `GET /api/history/{chatId}`, `DELETE /api/chats/{chatId}`, `GET /api/schema`, `GET /api/health`.
+aynı doğrulama), `POST /api/speech`, `GET /api/history/{chatId}`, `DELETE /api/chats/{chatId}`, `GET /api/schema`, `GET /api/health`.
 CLI: `set-password`, `seed`, `eval [id]`.
 
 ## Önyüz
 
-Giriş ekranı; üst çubukta model durumu, Veri kataloğu, Yeni sohbet, kullanıcı adı + Çıkış. Sol hamburger menü **Geçmiş Sorgularım**:
+Giriş ekranı; soru kutusunun sağında mikrofon butonu; üst çubukta model durumu, Veri kataloğu, Yeni sohbet, kullanıcı adı + Çıkış. Sol hamburger menü **Geçmiş Sorgularım**:
 konuşmalar `localStorage`'da (rapor başına ≤200 satır, kota dolarsa en eskiler silinir); tıklayınca açılır, tam veri `/api/history` ile
 tazelenir ve konuşma aynı `chatId` ile devam eder; çöp kutusu ikonu + `confirm` ile hem yerelden hem sunucudan silinir.
 Rapor kartı: başlık, özet, rozetler (önbellekten, kendini düzeltti, performans uyarısı), Grafik/Tablo/SQL sekmeleri, CSV (UTF-8 BOM, `;`).
@@ -89,7 +94,8 @@ Netleştirme kartında seçenek butonları; engellendi kartında durduran katman
 - Testler: doğrulayıcı (izin/ret/PII/bellek sınırı/tek ifade), giriş (doğru/yanlış/kilit/özet), `examples.md` SQL'lerinin çalışması.
 - Eval: ≥24 soru (`rapor` için beklenen SQL; sonuç kümesi kolon adından bağımsız karşılaştırılır; `netlestirme`/`ret` için tür),
   takip soruları `onceki` alanıyla. Doğruluk kodla değil prompt dosyalarıyla iyileştirilir.
-- Scriptler: `start-llm`, `dev`, `demo` (`.sh` macOS/Linux, `.ps1` Windows). README: macOS + Windows kurulum, çalıştırma, sorun giderme.
+- Scriptler: `start-llm`, `start-whisper`, `dev`, `demo` (`.sh` macOS/Linux, `.ps1` Windows) + `.devcontainer` ve `codespace.sh`
+  (GitHub Models ile kurulumsuz deneme, ses kapalı). README: macOS + Windows + Codespaces kurulum, çalıştırma, sorun giderme.
 
 **Bitti tanımı:** testler yeşil; eval ≥%90; giriş/çıkış ve geçmiş menüsü tarayıcıda çalışıyor; `ReportDb:Provider` ve `Llm:BaseUrl`
 değiştirilerek kod değişmeden Azure SQL ve Azure LLM'e geçilebiliyor.

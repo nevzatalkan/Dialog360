@@ -53,6 +53,12 @@ Varsayılan model: **Qwen3-30B-A3B-Instruct-2507 IQ4_XS** (~16 GB) —
 | Windows, daha az VRAM | `--n-gpu-layers` değerini düşürün (örn. 20) ya da `0` ile yalnızca CPU; model MoE (3B aktif) olduğu için CPU'da da kullanılabilir hızdadır, en az 32 GB RAM önerilir |
 | Daha az bellek | Aynı repodaki daha küçük bir quant'ı seçin; doğruluğu `eval` ile ölçün |
 
+**Sesle soru (opsiyonel):** Whisper modeli **ggml-large-v3-turbo-q5_0.bin** (~574 MB) —
+[ggerganov/whisper.cpp](https://huggingface.co/ggerganov/whisper.cpp)
+([doğrudan indirme](https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin)).
+Qwen ile birlikte yaklaşık 1 GB ek bellek kullanır (24 GB'lık M4'te ikisi birlikte çalışır). Kurulmazsa mikrofon butonu pasif görünür,
+uygulamanın geri kalanı etkilenmez. Yerel Whisper yerine Azure AI Speech de kullanılabilir (bkz. [Sesle soru](#sesle-soru)).
+
 ---
 
 ## macOS
@@ -60,7 +66,7 @@ Varsayılan model: **Qwen3-30B-A3B-Instruct-2507 IQ4_XS** (~16 GB) —
 ### Kurulum (bir kez)
 
 ```bash
-brew install git dotnet node llama.cpp
+brew install git dotnet node llama.cpp whisper-cpp
 git clone https://github.com/nevzatalkan/Dialog360.git
 cd Dialog360
 ```
@@ -81,7 +87,8 @@ cd api && dotnet run -- set-password
 
 ```bash
 scripts/start-llm.sh        # 1. terminal: yerel model → http://127.0.0.1:18080/v1
-scripts/demo.sh             # 2. terminal: önyüzü derler, her şeyi http://localhost:5080 adresinde sunar
+scripts/start-whisper.sh    # 2. terminal (opsiyonel): sesle soru → http://127.0.0.1:18090
+scripts/demo.sh             # 3. terminal: önyüzü derler, her şeyi http://localhost:5080 adresinde sunar
 ```
 
 Geliştirme için `scripts/dev.sh` (API 5080 + Vite 5173, sıcak yenileme).
@@ -99,6 +106,12 @@ llama-server \
 ```
 
 Log'da `server is listening on http://127.0.0.1:18080` görünce hazırdır. Kontrol: `curl 127.0.0.1:18080/health` → `{"status":"ok"}`
+
+**1b. Ses tanıma (opsiyonel, ayrı terminal)**
+
+```bash
+whisper-server -m ~/models/ggml-large-v3-turbo-q5_0.bin --host 127.0.0.1 --port 18090
+```
 
 **2. API (2. terminal)**
 
@@ -151,6 +164,9 @@ winget install OpenJS.NodeJS.LTS
 winget install llama.cpp
 ```
 
+Sesle soru için (opsiyonel): whisper.cpp'nin Windows derlemesini [GitHub releases](https://github.com/ggml-org/whisper.cpp/releases)
+sayfasından indirip `whisper-server.exe`'nin bulunduğu klasörü PATH'e ekleyin. Ses tarayıcıda WAV'a çevrildiği için ffmpeg gerekmez.
+
 Kurulumdan sonra **terminali kapatıp yeniden açın** (PATH güncellensin). Kontrol: `dotnet --version`, `node --version`, `llama-server --version`.
 
 > NVIDIA ekran kartında en iyi performans için llama.cpp'nin CUDA derlemesini
@@ -176,7 +192,10 @@ cd api; dotnet run -- set-password; cd ..
 # 1. terminal: yerel model
 powershell -ExecutionPolicy Bypass -File scripts\start-llm.ps1 -Model C:\models\Qwen3-30B-A3B-Instruct-2507-IQ4_XS.gguf
 
-# 2. terminal: önyüzü derler, her şeyi http://localhost:5080 adresinde sunar
+# 2. terminal (opsiyonel): sesle soru
+powershell -ExecutionPolicy Bypass -File scripts\start-whisper.ps1 -Model C:\models\ggml-large-v3-turbo-q5_0.bin
+
+# 3. terminal: önyüzü derler, her şeyi http://localhost:5080 adresinde sunar
 powershell -ExecutionPolicy Bypass -File scripts\demo.ps1
 ```
 
@@ -259,6 +278,8 @@ dotnet test tests                # güvenlik testleri
 | Giriş ekranında "Henüz kullanıcı tanımlı değil" | `dotnet run -- set-password` (api klasöründe) |
 | Şifreyi unuttum / değiştirmek istiyorum | Aynı komutu yeniden çalıştırın; açık oturumların hepsi kapanır |
 | "Çok fazla hatalı deneme" | 5 hatalı denemeden sonra giriş 5 dakika kilitlenir; bekleyin |
+| Mikrofon butonu soluk / tıklanmıyor | Ses tanıma sunucusu kapalı: `scripts/start-whisper` ile başlatın ya da `Speech:Provider` ayarını kontrol edin |
+| "Mikrofona erişilemedi" | Tarayıcının mikrofon iznini verin; sayfa `localhost` ya da HTTPS üzerinden açılmalı |
 | Arayüzde "Model kapalı · yalnızca önbellek" | Model sunucusu çalışmıyor; daha önce sorulmuş sorular önbellekten cevaplanmaya devam eder |
 | "Geçen ay" gibi sorular boş dönüyor | Veri eski tarihli; `dotnet run -- seed` (api klasöründe) |
 | İlk soru çok yavaş | API açılışındaki ısınma (~20 sn, Windows'ta CPU modunda daha uzun) bitmeden soru sorulmuştur; bir kez bekleyin |
@@ -266,9 +287,26 @@ dotnet test tests                # güvenlik testleri
 ## Kullanım
 
 - **Giriş:** Uygulama tek kullanıcılıdır; `set-password` ile tanımlanan kullanıcı adı ve şifreyle girilir. Sağ üstteki **Çıkış** oturumu sunucuda da sonlandırır.
+- **Sesle soru:** Soru kutusunun sağındaki 🎤 butonuna basıp konuşun, bitince tekrar basın (en fazla 30 sn). Metin kutuya
+  yazılır; kontrol edip **Sor**'a basın. Ses tanıma hatalarını ("yadeleri" → iade gibi) dil modeli düzeltip varsayımlarda belirtir.
 - **Geçmiş Sorgularım:** Sol üstteki ☰ menüsü önceki konuşmaları listeler. Bir konuşmaya tıklayınca raporlarıyla birlikte açılır ve
   kaldığı yerden takip sorusu sorulabilir. Çöp kutusu konuşmayı (onaydan sonra) hem bu tarayıcıdan hem sunucudan siler.
   Konuşma listesi tarayıcının `localStorage`'ında tutulur.
+
+## Sesle soru
+
+```
+Mikrofon ─► tarayıcıda 16 kHz mono WAV ─► POST /api/speech (giriş + X-Diyalog360 başlığı)
+        ─► Speech:Provider ─┬─ Whisper (yerel whisper.cpp, :18090) ─► metin ─► soru kutusu
+                            └─ AzureSpeech (Azure AI Speech, kısa ses REST)
+```
+
+- Ses tarayıcıda WAV'a çevrilir: sunucuda ffmpeg gerekmez, aynı dosya her iki sağlayıcıya gider.
+- Whisper'a **alan terimleri** (şube, şehir, sektör, segment, kart tipi... veri kataloğundan otomatik) ön metin olarak verilir; böylece
+  "Alsancak", "KOBİ", "Karşıyaka" doğru yazılır. Üretilen metin `api/Data/speech-prompt.generated.txt` dosyasına yazılır.
+- Azure'a geçmek için `appsettings.json` → `Speech: { "Provider": "AzureSpeech", "AzureRegion": "westeurope", "AzureKey": "..." }`
+  (anahtarı user-secrets/ortam değişkeniyle verin: `Speech__AzureKey`). Kapatmak için `"Provider": "None"`.
+- Ölçüm (M4, Qwen ile aynı anda): 3,5–4,6 sn'lik konuşma ~1,1–1,6 sn'de yazıya dönüyor.
 
 ## Akış
 
@@ -312,9 +350,9 @@ SQL panelindeki **"SQL'i düzenle ve çalıştır"** ile `DELETE FROM Musteri` y
 | `eval/questions.json` | Soru + beklenen SQL; sonuç kümeleri karşılaştırılır |
 
 ```bash
-cd api && dotnet run -- eval        # tüm eval seti (önbelleksiz), sonuç eval/results.json
+cd api && dotnet run -- eval        # tüm eval seti (önbelleksiz), sonuç eval/results.json — son koşu: 24/24
 cd api && dotnet run -- eval q18    # tek soru
-dotnet test tests                   # SqlGuard güvenlik testleri + örnek SQL'lerin geçerliliği
+dotnet test tests                   # 38 test: SqlGuard, giriş, ses + örnek SQL'lerin geçerliliği
 ```
 
 Birleşik prompt her açılışta `api/Data/prompt.generated.md` dosyasına yazılır.
@@ -334,13 +372,16 @@ Demo öncesi senaryoyu bir kez koşturun: cevaplar önbelleğe girer, canlı dem
 
 ```
 api/        .NET 10 Minimal API
-  Services/ SqlGuard, QueryRunner, SchemaCatalog, PromptBuilder, LlmClient, ChatOrchestrator, ReportBuilder, AppStore, EvalRunner
-  Data/     DemoSeeder + bank.db (rapor verisi) + app.db (sohbet, önbellek, log)
+  Services/ SqlGuard, QueryRunner, SchemaCatalog, PromptBuilder, LlmClient, ChatOrchestrator, ReportBuilder,
+            AuthService, SpeechToText, AppStore, EvalRunner
+  Data/     DemoSeeder + bank.db (rapor verisi) + app.db (sohbet, önbellek, oturum, log) + auth.json (kullanıcı)
   Prompt/   LLM'e giden metinler
-web/        React + TypeScript + Vite + Tailwind + Recharts
-eval/       Doğruluk ölçüm seti
-tests/      xUnit güvenlik testleri
-scripts/    start-llm, dev, demo (.sh = macOS/Linux, .ps1 = Windows), codespace (Codespaces + GitHub Models)
+web/        React + TypeScript + Vite + Tailwind + Recharts (giriş, sohbet, rapor kartı, Geçmiş Sorgularım, mikrofon)
+eval/       Doğruluk ölçüm seti (24 soru; son koşu 24/24)
+tests/      xUnit testleri (38: SQL doğrulayıcı, giriş, ses)
+docs/       ARCHITECTURE.md (mimari), REBUILD_PROMPT.md (sıfırdan üretim prompt'u)
+.devcontainer/  GitHub Codespaces ortamı
+scripts/    start-llm, start-whisper, dev, demo (.sh = macOS/Linux, .ps1 = Windows), codespace (Codespaces + GitHub Models)
 ```
 
 LLM istemcisi OpenAI uyumludur; `appsettings.json` → `Llm:BaseUrl/Model/ApiKey` değiştirilerek Azure OpenAI vb. bir servise geçilebilir
