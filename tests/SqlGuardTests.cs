@@ -142,7 +142,9 @@ public sealed class SqlGuardTests(DemoDbFixture db) : IClassFixture<DemoDbFixtur
         var header = "RIFF\0\0\0\0WAVE"u8.ToArray();
         Assert.True(Wav.LooksValid([.. header, .. new byte[40]]));
         Assert.False(Wav.LooksValid("ID3 fake mp3 content that is long enough to pass length"u8.ToArray()));
-        Assert.False(Wav.LooksValid(header));
+        Assert.True(Wav.LooksValid([.. header, .. new byte[32]]));
+        Assert.False(Wav.HasAudio([.. header, .. new byte[32]]), "yalnızca başlık = boş kayıt");
+        Assert.True(Wav.HasAudio([.. header, .. new byte[32], .. new byte[16000]]));
     }
 
     [Fact]

@@ -219,6 +219,7 @@ api.MapPost("/speech", async (HttpRequest request, ISpeechToText stt, Cancellati
     await file.CopyToAsync(buffer, ct);
     var wav = buffer.ToArray();
     if (!Wav.LooksValid(wav)) return Results.BadRequest(new { error = "Ses kaydı WAV biçiminde olmalı." });
+    if (!Wav.HasAudio(wav)) return Results.BadRequest(new { error = "Kayıt boş: mikrofondan ses gelmedi. Mikrofon iznini kontrol edin." });
     try
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();

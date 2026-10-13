@@ -9,9 +9,30 @@ export interface Recording {
   cancel: () => void
 }
 
+/** Bu süreden kısa (ya da hiç) ses gelmediyse kayıt boş sayılır. */
+const MIN_SECONDS = 0.3
+/** En yüksek genlik bunun altındaysa kayıt sessiz sayılır. */
+const SILENCE_PEAK = 0.01
+
+export class EmptyRecordingError extends Error {}
+
 export async function startRecording(): Promise<Recording> {
-  const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } })
+  // AudioContext tıklamayla aynı anda oluşturulur; izin beklenirken "askıya alınmış" başlamasın
   const ctx = new AudioContext()
+  let stream: MediaStream
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } })
+  } catch (e) {
+    void ctx.close()
+    throw e
+  }
+  if (ctx.state === 'suspended') await ctx.resume()
+  const track = stream.getAudioTracks()[0]
+  if (!track || track.readyState === 'ended') {
+    stream.getTracks().forEach(t => t.stop())
+    void ctx.close()
+    throw new EmptyRecordingError('Mikrofondan ses alınamadı. Bu tarayıcı mikrofonu engelliyor olabilir; uygulamayı Chrome, Edge ya da Safari\'de açın.')
+  }
   const source = ctx.createMediaStreamSource(stream)
   // ScriptProcessor eski ama her tarayıcıda çalışır ve ayrı bir worklet dosyası gerektirmez
   const processor = ctx.createScriptProcessor(4096, 1, 1)
@@ -29,8 +50,17 @@ export async function startRecording(): Promise<Recording> {
 
   return {
     stop: async () => {
+      const rate = ctx.sampleRate
       release()
-      return encodeWav(downsample(merge(chunks), ctx.sampleRate, TARGET_RATE), TARGET_RATE)
+      const samples = merge(chunks)
+      if (samples.length < rate * MIN_SECONDS)
+        throw new EmptyRecordingError('Mikrofondan ses alınamadı. Mikrofon iznini kontrol edin; Claude uygulamasının içindeki tarayıcı mikrofonu engeller, Chrome/Edge/Safari kullanın.')
+      // Tamamen sessiz kayıt: Whisper sessizlikte uydurma metin üretebilir ("Altyazı M.K." gibi)
+      let peak = 0
+      for (let i = 0; i < samples.length; i++) peak = Math.max(peak, Math.abs(samples[i]))
+      if (peak < SILENCE_PEAK)
+        throw new EmptyRecordingError('Kayıtta ses algılanmadı. Mikrofonun açık olduğundan emin olun ve biraz daha yüksek sesle konuşun.')
+      return encodeWav(downsample(samples, rate, TARGET_RATE), TARGET_RATE)
     },
     cancel: release,
   }

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../api'
-import { startRecording, type Recording } from '../recorder'
+import { EmptyRecordingError, startRecording, type Recording } from '../recorder'
 import { MicIcon, StopIcon } from './icons'
 
 const MAX_SECONDS = 30
@@ -51,8 +51,8 @@ export function MicButton({ available, disabled, onText, onError }: Props) {
       recording.current = await startRecording()
       setSeconds(0)
       setState('recording')
-    } catch {
-      onError('Mikrofona erişilemedi. Tarayıcının mikrofon iznini kontrol edin.')
+    } catch (e) {
+      onError(e instanceof EmptyRecordingError ? e.message : 'Mikrofona erişilemedi. Tarayıcının mikrofon iznini kontrol edin (Claude uygulamasının içindeki tarayıcı mikrofonu engeller; Chrome/Edge/Safari kullanın).')
     }
   }
 

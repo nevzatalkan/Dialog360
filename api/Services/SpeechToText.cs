@@ -140,10 +140,16 @@ public sealed class AzureSpeechToText(HttpClient http, SpeechOptions options) : 
 
 public static class Wav
 {
+    const int HeaderBytes = 44;
+    const int MinAudioBytes = 16000 * 2 / 5; // 16 kHz, 16 bit, en az 0,2 sn
+
     /// <summary>Gelen dosyanın gerçekten WAV olduğunu kaba biçimde doğrular (RIFF....WAVE başlığı).</summary>
     public static bool LooksValid(byte[] data) =>
-        data.Length > 44 && data[0] == 'R' && data[1] == 'I' && data[2] == 'F' && data[3] == 'F'
+        data.Length >= HeaderBytes && data[0] == 'R' && data[1] == 'I' && data[2] == 'F' && data[3] == 'F'
         && data[8] == 'W' && data[9] == 'A' && data[10] == 'V' && data[11] == 'E';
+
+    /// <summary>Başlık var ama ses verisi yok/çok kısa: mikrofondan ses gelmemiş demektir.</summary>
+    public static bool HasAudio(byte[] data) => data.Length >= HeaderBytes + MinAudioBytes;
 }
 
 /// <summary>Speech:Provider = None: mikrofon butonu pasif görünür.</summary>
