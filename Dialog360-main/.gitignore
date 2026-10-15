@@ -1,0 +1,19 @@
+# .NET
+bin/
+obj/
+*.user
+
+# Node
+node_modules/
+web/dist/
+
+# Üretilen dosyalar
+api/wwwroot/
+api/Data/*.db
+api/Data/*.db-shm
+api/Data/*.db-wal
+api/Data/prompt.generated.md
+eval/results.json
+
+.DS_Store
+.claude/settings.local.json

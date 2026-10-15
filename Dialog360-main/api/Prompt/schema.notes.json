@@ -1,0 +1,94 @@
+{
+  "tables": {
+    "Sube": {
+      "description": "Bankanın şubeleri",
+      "columns": {
+        "Ad": "Şube adı (semt), örn. 'Kadıköy'",
+        "Sehir": "Şubenin bulunduğu il",
+        "Bolge": "Coğrafi bölge"
+      }
+    },
+    "Musteri": {
+      "description": "Bankanın müşterileri",
+      "columns": {
+        "Id": "Müşteri numarası; müşteriyi listelerken isim yerine bunu kullan (AS [Müşteri No])",
+        "AdSoyad": {
+          "description": "Müşterinin adı soyadı",
+          "pii": true
+        },
+        "TCKN": {
+          "description": "T.C. kimlik numarası",
+          "pii": true
+        },
+        "Telefon": {
+          "description": "Cep telefonu",
+          "pii": true
+        },
+        "Segment": "Müşteri segmenti",
+        "SubeId": "Müşterinin bağlı olduğu şube",
+        "DogumYili": "Doğum yılı; yaş = strftime('%Y','now') - DogumYili",
+        "KayitTarihi": "Bankaya katılım tarihi (YYYY-MM-DD)",
+        "Cinsiyet": "Müşterinin cinsiyeti"
+      }
+    },
+    "Hesap": {
+      "description": "Müşterilerin mevduat hesapları; bir müşterinin birden çok hesabı olabilir",
+      "columns": {
+        "HesapTuru": "Hesap türü",
+        "ParaBirimi": "Hesabın para birimi; farklı para birimlerindeki bakiyeleri toplama",
+        "Bakiye": "Güncel bakiye (hesabın kendi para biriminde)",
+        "AcilisTarihi": "Hesap açılış tarihi (YYYY-MM-DD)",
+        "Durum": "Hesap durumu"
+      }
+    },
+    "Kart": {
+      "description": "Müşterilerin kredi kartları; bir müşterinin birden çok kartı olabilir",
+      "columns": {
+        "KartTipi": "Kart tipi",
+        "KartLimiti": "Kart limiti (TL)",
+        "AcilisTarihi": "Kartın açılış tarihi (YYYY-MM-DD)",
+        "Durum": "Kart durumu"
+      }
+    },
+    "Sektor": {
+      "description": "Kart harcamalarının yapıldığı iş yeri sektörleri",
+      "columns": {
+        "Ad": "Sektör adı"
+      }
+    },
+    "Islem": {
+      "description": "Kredi kartı işlemleri (harcama ve iadeler)",
+      "columns": {
+        "KartId": "İşlemin yapıldığı kart",
+        "SektorId": "İş yerinin sektörü",
+        "Tutar": "İşlem tutarı (TL, her zaman pozitif)",
+        "IslemTipi": "Harcama veya iade; harcama hesaplarında IslemTipi = 'Harcama' filtrele",
+        "Kanal": "İşlemin yapıldığı kanal",
+        "IslemTarihi": "İşlem zamanı (metin, 'YYYY-MM-DD HH:MM:SS')"
+      }
+    },
+    "Urun": {
+      "description": "Bankanın sattığı ürünler",
+      "columns": {
+        "Ad": "Ürün adı",
+        "Kategori": "Ürün kategorisi"
+      }
+    },
+    "MusteriUrun": {
+      "description": "Hangi müşterinin hangi ürüne sahip olduğu (çoka-çok)",
+      "columns": {
+        "BaslangicTarihi": "Ürünün müşteriye satıldığı tarih (YYYY-MM-DD)"
+      }
+    },
+    "Kampanya": {
+      "description": "Sektörlere yönelik indirim kampanyaları",
+      "columns": {
+        "Ad": "Kampanya adı",
+        "SektorId": "Kampanyanın geçerli olduğu sektör",
+        "BaslangicTarihi": "Kampanya başlangıcı (YYYY-MM-DD)",
+        "BitisTarihi": "Kampanya bitişi (YYYY-MM-DD)",
+        "IndirimOrani": "İndirim oranı (0.15 = %15)"
+      }
+    }
+  }
+}
