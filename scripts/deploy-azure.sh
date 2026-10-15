@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Diyalog 360 → Azure: Azure OpenAI (gpt-4.1-mini) + tek App Service (backend + önyüz aynı adreste).
+# Diyalog 360 → Azure: Microsoft Foundry (kaynak + proje, gpt-4.1-mini) + tek App Service (backend + önyüz aynı adreste) + Key Vault.
 # Ön koşul: az login, dotnet 10, node. İlk çalıştırmada kaynakları oluşturur, sonrakilerde yalnızca kodu yeniden deploy eder.
 #
 #   scripts/deploy-azure.sh            → oluştur/güncelle + deploy
@@ -7,7 +7,7 @@
 #
 # Giriş kullanıcısı: ilk çalıştırmada kullanıcı adı/şifre sorulur; yalnızca PBKDF2 özeti Key Vault'a gider.
 # Gizli değerler (OpenAI anahtarı, giriş özeti) Key Vault'ta; App Service onları yönetilen kimlikle okur.
-# Ücret: App Service B1 (~13 USD/ay) + Azure OpenAI kullanım başına. Kaldırmak için: az group delete -n rg-diyalog360
+# Ücret: App Service B1 (~13 USD/ay) + Foundry model kullanımı (token başına). Kaldırmak için: az group delete -n rg-diyalog360
 set -euo pipefail
 cd "$(dirname "$0")/.."
 export PYTHONWARNINGS=ignore DOTNET_CLI_TELEMETRY_OPTOUT=1
@@ -16,7 +16,8 @@ RG="${RG:-rg-diyalog360}"
 LOC="${LOC:-swedencentral}"
 SUFFIX="${SUFFIX:-$(az group show -n "$RG" --query tags.suffix -o tsv 2>/dev/null || true)}"
 SUFFIX="${SUFFIX:-$(openssl rand -hex 3)}"
-AOAI="aoai-diyalog360-$SUFFIX"
+FOUNDRY="foundry-diyalog360-$SUFFIX"
+PROJECT="${PROJECT:-diyalog360}"
 API="diyalog360-api-$SUFFIX"
 PLAN="asp-diyalog360"
 KV="kv-diyalog360-$SUFFIX"
@@ -32,10 +33,13 @@ az provider register -n Microsoft.CognitiveServices --wait >/dev/null
 az provider register -n Microsoft.KeyVault --wait >/dev/null
 az group create -n "$RG" -l "$LOC" --tags suffix="$SUFFIX" -o none
 
-step "Azure OpenAI + $MODEL deployment"
-az cognitiveservices account show -n "$AOAI" -g "$RG" -o none 2>/dev/null ||
-  az cognitiveservices account create -n "$AOAI" -g "$RG" -l "$LOC" --kind OpenAI --sku S0 --custom-domain "$AOAI" --yes -o none
-az cognitiveservices account deployment create -g "$RG" -n "$AOAI" --deployment-name "$MODEL" --model-name "$MODEL" \
+step "Microsoft Foundry kaynağı + proje + $MODEL deployment"
+az cognitiveservices account show -n "$FOUNDRY" -g "$RG" -o none 2>/dev/null ||
+  az cognitiveservices account create -n "$FOUNDRY" -g "$RG" -l "$LOC" --kind AIServices --sku S0 --custom-domain "$FOUNDRY" \
+    --allow-project-management --yes -o none
+az cognitiveservices account project show -n "$FOUNDRY" -g "$RG" --project-name "$PROJECT" -o none 2>/dev/null ||
+  az cognitiveservices account project create -n "$FOUNDRY" -g "$RG" --project-name "$PROJECT" -l "$LOC" -o none
+az cognitiveservices account deployment create -g "$RG" -n "$FOUNDRY" --deployment-name "$MODEL" --model-name "$MODEL" \
   --model-version "$MODEL_VERSION" --model-format OpenAI --sku-name GlobalStandard --sku-capacity "$CAPACITY" -o none
 
 step "App Service (Linux B1, .NET 10)"
@@ -43,7 +47,7 @@ az appservice plan show -n "$PLAN" -g "$RG" -o none 2>/dev/null || az appservice
 az webapp show -n "$API" -g "$RG" -o none 2>/dev/null || az webapp create -n "$API" -g "$RG" -p "$PLAN" --runtime "DOTNETCORE:10.0" --https-only true -o none
 az webapp config set -g "$RG" -n "$API" --always-on true --http20-enabled true --min-tls-version 1.2 --ftps-state Disabled -o none
 
-step "Key Vault: OpenAI anahtarı ve giriş özeti secret olarak; uygulama yönetilen kimlikle okur"
+step "Key Vault: model anahtarı ve giriş özeti secret olarak; uygulama yönetilen kimlikle okur"
 az keyvault show -n "$KV" -g "$RG" -o none 2>/dev/null ||
   az keyvault create -n "$KV" -g "$RG" -l "$LOC" --enable-rbac-authorization true --retention-days 7 -o none
 KVID=$(az keyvault show -n "$KV" -g "$RG" --query id -o tsv)
@@ -57,7 +61,7 @@ put_secret() {  # rol ataması yayılana kadar yeniden dener; değer komut satı
   for _ in $(seq 1 12); do az keyvault secret set --vault-name "$KV" -n "$1" --file "$SECRET" --encoding utf-8 -o none 2>/dev/null && return 0; sleep 10; done
   echo "HATA: $1 Key Vault'a yazılamadı" >&2; return 1
 }
-az cognitiveservices account keys list -g "$RG" -n "$AOAI" --query key1 -o tsv | tr -d '\n' > "$SECRET"; put_secret llm-api-key
+az cognitiveservices account keys list -g "$RG" -n "$FOUNDRY" --query key1 -o tsv | tr -d '\n' > "$SECRET"; put_secret llm-api-key
 if ! az keyvault secret show --vault-name "$KV" -n auth-credentials -o none 2>/dev/null; then
   echo "Buluttaki uygulama için giriş kullanıcısı oluşturun (yalnızca PBKDF2 özeti Key Vault'a gider):"
   (cd api && dotnet run -- set-password --print | tail -1 | tr -d '\n') > "$SECRET"; put_secret auth-credentials
@@ -66,7 +70,7 @@ fi
 
 step "Uygulama ayarları (gizli değerler yalnızca Key Vault referansı olarak)"
 az webapp config appsettings set -g "$RG" -n "$API" -o none --settings \
-  "Llm__BaseUrl=https://$AOAI.openai.azure.com/openai/v1" "Llm__Model=$MODEL" "Llm__LlamaCachePrompt=false" \
+  "Llm__BaseUrl=https://$FOUNDRY.services.ai.azure.com/openai/v1" "Llm__Model=$MODEL" "Llm__LlamaCachePrompt=false" \
   "Llm__ApiKey=@Microsoft.KeyVault(VaultName=$KV;SecretName=llm-api-key)" \
   "Auth__Credentials=@Microsoft.KeyVault(VaultName=$KV;SecretName=auth-credentials)" \
   "Speech__Provider=None" "Storage__DataDir=/home/data" "Storage__Wal=false" \
