@@ -17,6 +17,30 @@ Sistem üç parçadan oluşur:
 
 Aşağıda önce iki işletim sisteminde ortak olan model dosyası, ardından **macOS** ve **Windows** için ayrı adımlar var.
 
+## Azure'a deploy (Azure OpenAI + App Service + Key Vault)
+
+```bash
+az login
+scripts/deploy-azure.sh
+```
+
+Script tek bir kaynak grubunda (`rg-diyalog360`, Sweden Central) şunları oluşturur ve uygulamayı deploy eder; ikinci çalıştırmada
+yalnızca kodu günceller:
+
+| Kaynak | Görev |
+|---|---|
+| Azure OpenAI + `gpt-4.1-mini` deployment (GlobalStandard) | LLM; kullanım başına ücret |
+| App Service planı B1 Linux + web app (.NET 10) | Backend **ve** önyüz aynı adreste (`https://diyalog360-api-<sonek>.azurewebsites.net`); ~13 USD/ay |
+| Key Vault (RBAC) | OpenAI anahtarı ve giriş şifre özeti; web app **yönetilen kimlikle** okur, App Service ayarlarında yalnızca Key Vault referansı durur |
+
+- İlk çalıştırmada giriş kullanıcısı sorulur; Azure'a yalnızca PBKDF2 özeti gider (şifrenin kendisi değil).
+- Veriler (`bank.db`, `app.db`, oturum anahtarları) deploy'larda silinmeyen `/home/data` klasöründedir; yayın paketine `Data/` asla girmez
+  (script bunu kontrol eder).
+- Bulutta sesle soru kapalıdır (`Speech:Provider=None`); Azure AI Speech eklenebilir.
+- Azure modeliyle eval: **24/24**, soru başına ~2–7 sn. Ölçmek için:
+  `Llm__BaseUrl=https://<aoai>.openai.azure.com/openai/v1 Llm__Model=gpt-4.1-mini Llm__ApiKey=... Llm__LlamaCachePrompt=false dotnet run -- eval`
+- Kaldırmak için: `az group delete -n rg-diyalog360` (Key Vault 7 gün geri dönüşüm kutusunda kalır).
+
 ## GitHub Codespaces (kurulumsuz, ücretsiz LLM)
 
 Bilgisayara hiçbir şey kurmadan, tarayıcıda çalıştırmak için: GitHub'da repo sayfası → **Code → Codespaces →
@@ -381,7 +405,8 @@ eval/       Doğruluk ölçüm seti (24 soru; son koşu 24/24)
 tests/      xUnit testleri (38: SQL doğrulayıcı, giriş, ses)
 docs/       ARCHITECTURE.md (mimari), REBUILD_PROMPT.md (sıfırdan üretim prompt'u)
 .devcontainer/  GitHub Codespaces ortamı
-scripts/    start-llm, start-whisper, dev, demo (.sh = macOS/Linux, .ps1 = Windows), codespace (Codespaces + GitHub Models)
+scripts/    start-llm, start-whisper, dev, demo (.sh = macOS/Linux, .ps1 = Windows), codespace (Codespaces + GitHub Models),
+            deploy-azure.sh (Azure OpenAI + App Service + Key Vault)
 ```
 
 LLM istemcisi OpenAI uyumludur; `appsettings.json` → `Llm:BaseUrl/Model/ApiKey` değiştirilerek Azure OpenAI vb. bir servise geçilebilir

@@ -17,7 +17,8 @@ using Microsoft.AspNetCore.RateLimiting;
 Console.OutputEncoding = System.Text.Encoding.UTF8; // Windows konsolunda Türkçe karakter ve ✅/❌ için
 var builder = WebApplication.CreateBuilder(args);
 var root = builder.Environment.ContentRootPath;
-var dataDir = Path.Combine(root, "Data");
+// Azure App Service'te kalıcı ve deploy'larda silinmeyen bir klasör verilir (örn. /home/data)
+var dataDir = builder.Configuration["Storage:DataDir"] is { Length: > 0 } customDataDir ? customDataDir : Path.Combine(root, "Data");
 var promptDir = Path.Combine(root, "Prompt");
 var bankDb = Path.Combine(dataDir, "bank.db");
 var authFile = Path.Combine(dataDir, "auth.json");
@@ -25,7 +26,7 @@ Directory.CreateDirectory(dataDir);
 
 if (args.Contains("set-password"))
 {
-    Environment.ExitCode = SetPasswordCommand.Run(authFile, args.SkipWhile(a => a != "set-password").Skip(1).FirstOrDefault(a => !a.StartsWith('-')));
+    Environment.ExitCode = SetPasswordCommand.Run(authFile, args.SkipWhile(a => a != "set-password").Skip(1).FirstOrDefault(a => !a.StartsWith('-')), print: args.Contains("--print"));
     return;
 }
 
@@ -49,8 +50,10 @@ builder.Services.AddSingleton(promptBuilder);
 builder.Services.AddSingleton(guard);
 builder.Services.AddSingleton(new QueryRunner(bankDb, guard, catalog,
     builder.Configuration.GetValue("Query:MaxRows", 1000), builder.Configuration.GetValue("Query:TimeoutSeconds", 15)));
-builder.Services.AddSingleton(new AppStore(Path.Combine(dataDir, "app.db")));
-builder.Services.AddSingleton(new AuthService(authFile));
+// Ağ dosya sistemlerinde (Azure App Service /home) WAL güvenilir değildir: Storage:Wal=false
+builder.Services.AddSingleton(new AppStore(Path.Combine(dataDir, "app.db"), builder.Configuration.GetValue("Storage:Wal", true)));
+// Bulutta kullanıcı dosyası yerine Auth:Credentials ayarı (set-password --print çıktısı) kullanılabilir
+builder.Services.AddSingleton(new AuthService(authFile, configuredCredentials: builder.Configuration["Auth:Credentials"]));
 builder.Services.AddHttpClient<LlmClient>(c => c.Timeout = Timeout.InfiniteTimeSpan);
 
 // Sesle soru: Speech:Provider = Whisper (yerel whisper.cpp) | AzureSpeech | None
@@ -116,7 +119,7 @@ if (args.Contains("eval"))
     return;
 }
 
-if (!File.Exists(authFile))
+if (!app.Services.GetRequiredService<AuthService>().IsConfigured)
     app.Logger.LogWarning("Kullanıcı tanımlı değil; giriş yapılamaz. Tanımlamak için: cd api && dotnet run -- set-password");
 
 app.Use(async (ctx, next) =>
@@ -130,6 +133,8 @@ app.Use(async (ctx, next) =>
     if (ctx.Request.Path.StartsWithSegments("/api")) h.CacheControl = "no-store";
     await next();
 });
+// Bulutta (HTTPS) tarayıcıya "bu siteye her zaman HTTPS ile gel" der; localhost'a uygulanmaz
+if (!app.Environment.IsDevelopment()) app.UseHsts();
 app.UseDefaultFiles();
 app.UseStaticFiles();
 app.UseRateLimiter();
@@ -272,13 +277,13 @@ static partial class ChatId
 
 static class SetPasswordCommand
 {
-    public static int Run(string authFile, string? username)
+    public static int Run(string authFile, string? username, bool print = false)
     {
         try
         {
             if (string.IsNullOrWhiteSpace(username))
             {
-                Console.Write("Kullanıcı adı: ");
+                Console.Error.Write("Kullanıcı adı: "); // sorular stderr'e: --print çıktısı yakalanırken de görünsün
                 username = Console.ReadLine();
             }
             string password;
@@ -290,6 +295,12 @@ static class SetPasswordCommand
             {
                 password = ReadHidden("Şifre: ");
                 if (ReadHidden("Şifre (tekrar): ") != password) { Console.Error.WriteLine("Şifreler eşleşmiyor."); return 1; }
+            }
+            if (print)
+            {
+                // Bulut için: çıktı Auth__Credentials uygulama ayarına konur; şifrenin kendisi değil, PBKDF2 özeti
+                Console.WriteLine(AuthService.CreateCredentials(username ?? "", password));
+                return 0;
             }
             AuthService.SetPassword(authFile, username ?? "", password);
             Console.WriteLine($"Kullanıcı kaydedildi: {username!.Trim()} → {authFile}");
@@ -304,7 +315,7 @@ static class SetPasswordCommand
 
     static string ReadHidden(string prompt)
     {
-        Console.Write(prompt);
+        Console.Error.Write(prompt);
         var sb = new System.Text.StringBuilder();
         while (true)
         {
@@ -313,7 +324,7 @@ static class SetPasswordCommand
             if (key.Key == ConsoleKey.Backspace) { if (sb.Length > 0) sb.Length--; continue; }
             if (!char.IsControl(key.KeyChar)) sb.Append(key.KeyChar);
         }
-        Console.WriteLine();
+        Console.Error.WriteLine();
         return sb.ToString();
     }
 }

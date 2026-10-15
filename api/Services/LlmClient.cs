@@ -126,7 +126,24 @@ public sealed class LlmClient(HttpClient http, LlmOptions options, ILogger<LlmCl
             Content = new StringContent(body.ToJsonString(), System.Text.Encoding.UTF8, "application/json"),
         };
         AddAuth(req);
-        using var res = await http.SendAsync(req, cts.Token);
+        var payload = body.ToJsonString();
+        HttpResponseMessage res = await http.SendAsync(req, cts.Token);
+        // Bulut servislerinde dakikalık token sınırı (429): servisin önerdiği kadar bekleyip en fazla 2 kez yeniden dene
+        for (int retry = 0; res.StatusCode == System.Net.HttpStatusCode.TooManyRequests && retry < 2; retry++)
+        {
+            var wait = res.Headers.RetryAfter?.Delta ?? TimeSpan.FromSeconds(5 * (retry + 1));
+            if (wait > TimeSpan.FromSeconds(20)) break;
+            log.LogWarning("LLM hız sınırı (429); {Seconds} sn sonra yeniden denenecek", wait.TotalSeconds);
+            res.Dispose();
+            await Task.Delay(wait, cts.Token);
+            using var again = new HttpRequestMessage(HttpMethod.Post, req.RequestUri)
+            {
+                Content = new StringContent(payload, System.Text.Encoding.UTF8, "application/json"),
+            };
+            AddAuth(again);
+            res = await http.SendAsync(again, cts.Token);
+        }
+        using var _ = res;
         var text = await res.Content.ReadAsStringAsync(cts.Token);
         if (!res.IsSuccessStatusCode)
             throw new HttpRequestException($"LLM hatası {(int)res.StatusCode}: {text[..Math.Min(text.Length, 300)]}");
@@ -141,10 +158,11 @@ public sealed class LlmClient(HttpClient http, LlmOptions options, ILogger<LlmCl
 
     void AddAuth(HttpRequestMessage req)
     {
-        if (!string.IsNullOrEmpty(options.ApiKey))
-        {
-            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", options.ApiKey);
+        if (string.IsNullOrEmpty(options.ApiKey)) return;
+        // Azure OpenAI / Foundry anahtarı "api-key" başlığıyla ister; diğer OpenAI uyumlu servisler Bearer
+        if (req.RequestUri?.Host.EndsWith(".azure.com", StringComparison.OrdinalIgnoreCase) == true)
             req.Headers.Add("api-key", options.ApiKey);
-        }
+        else
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", options.ApiKey);
     }
 }

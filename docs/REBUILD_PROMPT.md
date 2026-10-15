@@ -97,5 +97,8 @@ Netleştirme kartında seçenek butonları; engellendi kartında durduran katman
 - Scriptler: `start-llm`, `start-whisper`, `dev`, `demo` (`.sh` macOS/Linux, `.ps1` Windows) + `.devcontainer` ve `codespace.sh`
   (GitHub Models ile kurulumsuz deneme, ses kapalı). README: macOS + Windows + Codespaces kurulum, çalıştırma, sorun giderme.
 
+- Azure: `deploy-azure.sh` → Azure OpenAI + tek App Service (önyüz + API aynı adres) + Key Vault (gizli değerler, yönetilen kimlik),
+  `Storage:DataDir=/home/data`, `Storage:Wal=false`, forwarded headers, HSTS; yayın paketinde `Data/` olmamalı.
+
 **Bitti tanımı:** testler yeşil; eval ≥%90; giriş/çıkış ve geçmiş menüsü tarayıcıda çalışıyor; `ReportDb:Provider` ve `Llm:BaseUrl`
 değiştirilerek kod değişmeden Azure SQL ve Azure LLM'e geçilebiliyor.

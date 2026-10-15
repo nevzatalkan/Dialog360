@@ -260,7 +260,25 @@ atlanır; uzak API'de KV önbelleği yoktur, ısınma yalnızca kota harcar). Se
 |---|---|---|
 | Yerel (macOS/Windows) | llama-server + Qwen3-30B-A3B | whisper-server (opsiyonel) |
 | GitHub Codespaces (`scripts/codespace.sh`, `.devcontainer/`) | GitHub Models (`openai/gpt-4.1-mini`, Codespaces'in `GITHUB_TOKEN`'ı) | Kapalı (`Speech__Provider=None`) |
-| Azure | Azure OpenAI / Foundry (`.../openai/v1`) | Azure AI Speech (`Speech:Provider=AzureSpeech`) |
+| Azure (`scripts/deploy-azure.sh`) | Azure OpenAI `gpt-4.1-mini` (`.../openai/v1`, `api-key` başlığı) | Kapalı; Azure AI Speech eklenebilir (`Speech:Provider=AzureSpeech`) |
+
+### Azure dağıtımı
+
+```
+Tarayıcı ──HTTPS──► App Service (Linux B1, .NET 10, Sweden Central)  ── önyüz (wwwroot) + /api aynı adreste
+                       │  yönetilen kimlik (Key Vault Secrets User)
+                       ├──► Key Vault: llm-api-key, auth-credentials  (ayarlarda @Microsoft.KeyVault(...) referansı)
+                       ├──► Azure OpenAI: gpt-4.1-mini (GlobalStandard, 200K TPM)
+                       └──► /home/data (kalıcı disk): bank.db, app.db, oturum anahtarları
+```
+
+- Önyüz ve backend aynı App Service'ten sunulur: oturum çerezi `SameSite=Strict` kalır, CORS gerekmez. (Ayrı Static Web App
+  denendi; deneme aboneliğinde West Europe yeni müşteri kabul etmediği için tek App Service'e geçildi.)
+- `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true`: App Service'in HTTPS sonlandırması uygulamaya bildirilir; çerez `Secure` olur, HSTS eklenir.
+- `Storage:DataDir=/home/data`, `Storage:Wal=false` (ağ diskinde WAL güvenilir değil). Yayın paketinde `Data/` hariç tutulur.
+- LLM istemcisi `*.azure.com` adreslerine anahtarı `api-key` başlığıyla gönderir; 429 (dakikalık token sınırı) gelirse servisin
+  önerdiği süre kadar bekleyip en fazla 2 kez yeniden dener.
+- Azure modeliyle eval 24/24, soru başına ~2–7 sn (yerel Qwen'de 5–20 sn).
 
 ---
 
@@ -424,6 +442,8 @@ paranteze al"). Model ve prompt deterministik olmadığı için her prompt deği
 | `Speech:Language` / `WhisperUrl` | `tr` / `http://127.0.0.1:18090` |
 | `Speech:AzureRegion` / `AzureKey` | — / — (anahtarı user-secrets ya da `Speech__AzureKey` ortam değişkeniyle verin) |
 | `Auth:SessionHours` | `8` |
+| `Auth:Credentials` | — (bulutta `set-password --print` çıktısı; Azure'da Key Vault referansı) |
+| `Storage:DataDir` / `Wal` | `<içerik kökü>/Data` / `true` (Azure: `/home/data` / `false`) |
 | `Query:MaxRows` / `TimeoutSeconds` | `1000` / `15` |
 
 llama-server: `--ctx-size 8192 --parallel 1 --n-gpu-layers 99 --flash-attn on --cache-type-k q8_0 --cache-type-v q8_0 --jinja`.
@@ -490,5 +510,9 @@ whisper-server: `-m ggml-large-v3-turbo-q5_0.bin --host 127.0.0.1 --port 18090` 
 | Ses testleri sentetik sesle yapıldı | macOS "Yelda" sesiyle ölçüldü; "iade" kelimesi bu seste "yade" duyuldu (LLM kuralıyla düzeltiliyor) | Gerçek kullanıcı kayıtlarıyla küçük bir ses eval seti |
 | Azure Speech ve Azure OpenAI denenmedi | Kod hazır, anahtar olmadığı için uçtan uca test edilmedi | İlk Azure kurulumunda `eval` ve ses testi koşturmak |
 | Bellek | Qwen + Whisper ile 24 GB makinede sistemde ~%7 boş bellek kalır | Demo sırasında diğer uygulamaları kapatmak; gerekirse Whisper'ı yalnızca kullanımda açmak |
+| Azure'da tek örnek | SQLite `/home` ağ diskinde; birden fazla örneğe ölçeklenemez | Ölçeklemek için Azure SQL (+ uygulama verisi için Azure SQL/Cosmos) |
+| Oturum anahtarları diskte ek şifrelemesiz | `/home/data/keys` yalnızca uygulama ve abonelik yöneticilerince erişilebilir | Data Protection anahtarlarını Key Vault ile korumak |
+| Azure OpenAI anahtarla erişim | Anahtar Key Vault'ta ama yine bir anahtar | Yönetilen kimlikle (Entra ID) anahtarsız erişim |
+| İlk deploy sonrası tek boş cevap | Bulut testinde yeniden başlatma sonrası ilk sohbet isteği bir kez boş döndü, yeniden üretilemedi | Deploy sonrası bir ısınma isteği atmak |
 | Mevcut kod SQLite'a bağlı | Azure SQL için `IReportDatabase` ayrımı yalnızca [REBUILD_PROMPT](REBUILD_PROMPT.md)'ta tanımlı | Sağlayıcı arayüzünü mevcut koda uygulamak |
 | Demo verisinde iptal edilmiş kartlarda da işlem var | Gerçekçilik açısından küçük tutarsızlık | Seeder'da iptal tarihinden sonraki işlemleri kesmek |

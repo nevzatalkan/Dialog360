@@ -6,6 +6,13 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
+  <!-- Yayın paketi: prompt dosyaları girer; Data/ (veritabanları, auth.json, oturum anahtarları) asla girmez -->
+  <ItemGroup>
+    <Content Remove="Data\**" />
+    <None Remove="Data\**" />
+    <Content Include="Prompt\**\*.md" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.12" />
   </ItemGroup>

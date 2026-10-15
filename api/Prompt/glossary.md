@@ -8,7 +8,7 @@
 - Mevduat / toplam bakiye = SUM(Hesap.Bakiye), Durum = 'Aktif' ve ParaBirimi = 'TRY' (döviz bakiyeleri TL ile toplanmaz)
 - Ürün sayısı = müşterinin MusteriUrun kayıt sayısı
 - Döviz hesabı = HesapTuru = 'Döviz' (para birimine göre değil); TL hesabı = ParaBirimi = 'TRY'
-- Kart ve hesap sayımları ("kart sayısı", "X hesabı olan müşteri") = kullanıcı aksini söylemedikçe yalnızca Durum = 'Aktif' kayıtlar; bunu varsayımlara yaz
+- Kart/hesap Durum filtresi yalnızca kullanıcı bir durum söylerse uygulanır ("aktif kart", "kapalı hesaplar", "iptal edilen kartlar"); söylemezse tüm kayıtlar sayılır (mevduat tanımındaki Aktif koşulu hariç)
 - Şube, şehir, il, bölge → Sube tablosu (Ad, Sehir, Bolge). Müşterinin şubesi Musteri.SubeId'dir; bir işlemin şubesi, işlemi yapan kartın müşterisinin şubesidir (Islem → Kart → Musteri → Sube)
 - Yaş = CAST(strftime('%Y','now') AS INTEGER) - Musteri.DogumYili
 - Kampanya harcaması = kampanyanın kendi sektöründe ve kendi tarihleri içinde yapılan harcama: JOIN Kampanya ka ON i.SektorId = ka.SektorId AND date(i.IslemTarihi) BETWEEN ka.BaslangicTarihi AND ka.BitisTarihi

@@ -12,7 +12,7 @@
   { "id": "q07", "soru": "Segmentlere göre müşteri sayısı", "beklenen_tur": "rapor",
     "beklenen_sql": "SELECT Segment, COUNT(*) FROM Musteri GROUP BY Segment" },
   { "id": "q08", "soru": "Kart tiplerine göre toplam kart sayısı", "beklenen_tur": "rapor",
-    "beklenen_sql": "SELECT KartTipi, COUNT(*) FROM Kart WHERE Durum = 'Aktif' GROUP BY KartTipi" },
+    "beklenen_sql": "SELECT KartTipi, COUNT(*) FROM Kart GROUP BY KartTipi" },
   { "id": "q09", "soru": "Bu yıl aylık toplam harcama trendi", "beklenen_tur": "rapor",
     "beklenen_sql": "SELECT strftime('%Y-%m', IslemTarihi), ROUND(SUM(Tutar), 2) FROM Islem WHERE IslemTipi = 'Harcama' AND IslemTarihi >= date('now','localtime','start of year') GROUP BY 1" },
   { "id": "q10", "soru": "Şehirlere göre müşteri sayısı", "beklenen_tur": "rapor",
@@ -39,7 +39,7 @@
   { "id": "q21", "soru": "Ortalama kart limiti en yüksek 3 şube", "beklenen_tur": "rapor",
     "beklenen_sql": "SELECT sb.Ad, ROUND(AVG(k.KartLimiti), 2) AS a FROM Kart k JOIN Musteri m ON k.MusteriId = m.Id JOIN Sube sb ON m.SubeId = sb.Id GROUP BY sb.Ad ORDER BY a DESC LIMIT 3" },
   { "id": "q22", "soru": "Döviz hesabı olan kaç müşteri var?", "beklenen_tur": "rapor",
-    "beklenen_sql": "SELECT COUNT(DISTINCT MusteriId) FROM Hesap WHERE HesapTuru = 'Döviz' AND Durum = 'Aktif'" },
+    "beklenen_sql": "SELECT COUNT(DISTINCT MusteriId) FROM Hesap WHERE HesapTuru = 'Döviz'" },
   { "id": "q23", "soru": "Yarın İstanbul'da hava nasıl olacak?", "beklenen_tur": "ret" },
   { "id": "q24", "onceki": ["Geçen ay sektörlere göre toplam kart harcaması"], "soru": "Sadece Platinum kartlar için göster", "beklenen_tur": "rapor",
     "beklenen_sql": "SELECT s.Ad, ROUND(SUM(i.Tutar), 2) FROM Islem i JOIN Sektor s ON i.SektorId = s.Id JOIN Kart k ON i.KartId = k.Id WHERE k.KartTipi = 'Platinum' AND i.IslemTipi = 'Harcama' AND i.IslemTarihi >= date('now','localtime','start of month','-1 month') AND i.IslemTarihi < date('now','localtime','start of month') GROUP BY s.Ad" }

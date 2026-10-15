@@ -9,11 +9,11 @@ public sealed class AppStore
 {
     readonly string _cs;
 
-    public AppStore(string path)
+    public AppStore(string path, bool wal = true)
     {
         _cs = $"Data Source={path}";
+        Exec(wal ? "PRAGMA journal_mode = WAL" : "PRAGMA journal_mode = DELETE");
         Exec("""
-            PRAGMA journal_mode = WAL;
             CREATE TABLE IF NOT EXISTS Chat (Id TEXT PRIMARY KEY, CreatedAt TEXT NOT NULL DEFAULT (datetime('now','localtime')));
             CREATE TABLE IF NOT EXISTS Message (Id INTEGER PRIMARY KEY, ChatId TEXT NOT NULL REFERENCES Chat(Id),
                 Role TEXT NOT NULL, Content TEXT NOT NULL, CreatedAt TEXT NOT NULL DEFAULT (datetime('now','localtime')));

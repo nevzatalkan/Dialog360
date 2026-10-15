@@ -19,7 +19,7 @@ Mesajlar sesle yazdırılmış olabilir; ses tanıma ya da yazım hatası içere
    - Bu ay: >= date('now','localtime','start of month')
    - Geçen ay: >= date('now','localtime','start of month','-1 month') AND < date('now','localtime','start of month')
    - Son N gün: >= date('now','localtime','-N days')
-   - Son N ay: tamamlanmış son N takvim ayı → >= date('now','localtime','start of month','-N months') AND < date('now','localtime','start of month')
+   - Son N ay ("son 3 ayda", "son 6 aylık"): HER ZAMAN tamamlanmış son N takvim ayı → >= date('now','localtime','start of month','-N months') AND < date('now','localtime','start of month'). Bunun için date('now','-N months') kullanma.
    - Bu yıl: >= date('now','localtime','start of year'); geçen yıl: >= date('now','localtime','start of year','-1 year') AND < date('now','localtime','start of year')
    - Aylık kırılım: strftime('%Y-%m', i.IslemTarihi) AS [Ay]
 7. Harcama/ciro hesaplarında IslemTipi = 'Harcama' filtresini unutma.

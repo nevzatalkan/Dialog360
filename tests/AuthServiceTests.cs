@@ -48,6 +48,17 @@ public sealed class AuthServiceTests : IDisposable
     }
 
     [Fact]
+    public void Bulutta_ayardan_gelen_kimlik_bilgisiyle_giris_yapilir()
+    {
+        var credentials = AuthService.CreateCredentials("bulut", "bulut-sifresi-123");
+        Assert.DoesNotContain("bulut-sifresi-123", credentials);
+        var auth = new AuthService(_file, _clock, configuredCredentials: credentials); // dosya yok, ayar var
+        Assert.True(auth.IsConfigured);
+        Assert.Equal(LoginStatus.Success, auth.Verify("bulut", "bulut-sifresi-123").Status);
+        Assert.Equal(LoginStatus.Failed, auth.Verify("bulut", "yanlis-sifre").Status);
+    }
+
+    [Fact]
     public void Kisa_sifre_reddedilir() =>
         Assert.Throws<ArgumentException>(() => AuthService.SetPassword(_file, "analist", "kisa"));
 
