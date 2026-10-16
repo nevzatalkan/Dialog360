@@ -1,0 +1,92 @@
+# main'e her push'ta: önyüz + testler + yayın paketi → Azure App Service.
+# Azure kaynaklarını scripts/deploy-azure.sh, GitHub → Azure yetkisini scripts/setup-github-deploy.sh kurar.
+# "production" ortamının değişkenleri tanımlanana kadar deploy adımı atlanır (build ve testler yine çalışır).
+name: Azure'a deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  id-token: write   # Azure'a şifresiz (OIDC) giriş
+  contents: read
+
+concurrency:
+  group: azure-production
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: 1
+      DOTNET_NOLOGO: 1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Önyüz (lint + build → api/wwwroot)
+        working-directory: web
+        run: npm ci && npm run lint && npm run build
+
+      - name: Testler
+        run: dotnet test tests
+
+      - name: Yayın paketi
+        run: dotnet publish api -c Release -o out
+
+      - name: Pakette hassas dosya olmasın
+        run: |
+          if find out \( -name auth.json -o -name '*.db' -o -path '*keys*' \) | grep -q .; then
+            echo "::error::Yayın paketinde hassas dosya var"; exit 1
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app
+          path: out
+          retention-days: 7
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://${{ vars.AZURE_WEBAPP_NAME }}.azurewebsites.net
+    steps:
+      - name: Azure ayarları tanımlı mı?
+        id: check
+        run: |
+          if [ -z "${{ vars.AZURE_CLIENT_ID }}" ] || [ -z "${{ vars.AZURE_WEBAPP_NAME }}" ]; then
+            echo "::warning::production ortamında AZURE_* değişkenleri yok; deploy atlandı. Kurulum: scripts/setup-github-deploy.sh"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.check.outputs.ready == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: app
+          path: out
+
+      - if: steps.check.outputs.ready == 'true'
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - if: steps.check.outputs.ready == 'true'
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ vars.AZURE_WEBAPP_NAME }}
+          package: out

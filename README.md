@@ -41,6 +41,19 @@ yalnızca kodu günceller:
   `Llm__BaseUrl=https://<foundry>.services.ai.azure.com/openai/v1 Llm__Model=gpt-4.1-mini Llm__ApiKey=... Llm__LlamaCachePrompt=false dotnet run -- eval`
 - Kaldırmak için: `az group delete -n rg-diyalog360` (Key Vault 7 gün geri dönüşüm kutusunda kalır).
 
+### Otomatik deploy (GitHub Actions)
+
+`main`'e her push'ta `.github/workflows/deploy-azure.yml` önyüzü derler, testleri çalıştırır ve geçerse paketi App Service'e yükler
+(Azure kaynaklarına ve ayarlarına dokunmaz). Tek seferlik kurulum, `deploy-azure.sh`'den sonra:
+
+1. Azure Cloud Shell'de (ya da `az login` yapılmış terminalde): `scripts/setup-github-deploy.sh`. GitHub'a yalnızca bu repo ve
+   `production` ortamı için şifresiz (OIDC) giriş ve yalnızca bu web app'e "Website Contributor" yetkisi verir; sonda 4 değer yazdırır.
+2. GitHub → Settings → Environments → **New environment** `production` → yazdırılan 4 değeri **Variables** olarak ekleyin
+   (`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZURE_WEBAPP_NAME`; hiçbiri gizli değildir).
+3. Actions → **Azure'a deploy** → *Run workflow*.
+
+Değişkenler tanımlanana kadar workflow build ve testleri yine çalıştırır, deploy adımını uyarıyla atlar.
+
 ## GitHub Codespaces (kurulumsuz, ücretsiz LLM)
 
 Bilgisayara hiçbir şey kurmadan, tarayıcıda çalıştırmak için: GitHub'da repo sayfası → **Code → Codespaces →
