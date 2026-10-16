@@ -54,6 +54,16 @@ yalnızca kodu günceller:
 
 Değişkenler tanımlanana kadar workflow build ve testleri yine çalıştırır, deploy adımını uyarıyla atlar.
 
+**Güvenlik kapısı:** deploy ancak şu kontrollerin hepsi temizse çalışır; tek bulgu deploy'u durdurur.
+
+| Kontrol | Araç | Bulgu olursa |
+|---|---|---|
+| Kod taraması (C#, TypeScript) | GitHub CodeQL, `security-extended` sorguları | Security → Code scanning'de görünür; düzeltin ya da yanlış alarmsa gerekçesiyle *Dismiss* edin |
+| Bağımlılık açıkları | `npm audit` (her önem düzeyi), `dotnet list package --vulnerable --include-transitive` | Paketi güncelleyin |
+| Gizli anahtar | gitleaks (tüm git geçmişi) | Anahtarı iptal edip yenileyin; yanlış alarmsa satıra `gitleaks:allow` ya da `.gitleaksignore`'a parmak izi |
+
+Repo ayarlarında **Secret scanning** ve **Push protection** da açık olmalı (Settings → Code security); böylece anahtar içeren push daha main'e ulaşmadan engellenir.
+
 ## GitHub Codespaces (kurulumsuz, ücretsiz LLM)
 
 Bilgisayara hiçbir şey kurmadan, tarayıcıda çalıştırmak için: GitHub'da repo sayfası → **Code → Codespaces →

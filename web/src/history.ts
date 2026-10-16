@@ -14,7 +14,7 @@ export interface Conversation {
   items: HistoryItem[]
 }
 
-const KEY = 'diyalog360.conversations.v1'
+const KEY = 'diyalog360.conversations.v1' // gitleaks:allow (localStorage anahtar adı)
 const ACTIVE_KEY = 'diyalog360.activeChat'
 /** localStorage ~5 MB; rapor başına saklanan satır sınırlanır (tam sonuç sunucudan gelir). */
 const MAX_ROWS_STORED = 200

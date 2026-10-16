@@ -1,6 +1,8 @@
-# main'e her push'ta: önyüz + testler + yayın paketi → Azure App Service.
+# main'e her push'ta: build + testler ve güvenlik kontrolleri paralel çalışır; ikisi de temizse → Azure App Service.
+# Güvenlik kapısı (GHAS): CodeQL kod taraması (C# + TypeScript), bağımlılık açıkları (NuGet + npm),
+# gizli anahtar taraması (tüm git geçmişi). Tek bir bulgu bile deploy'u durdurur.
 # Azure kaynaklarını scripts/deploy-azure.sh, GitHub → Azure yetkisini scripts/setup-github-deploy.sh kurar.
-# "production" ortamının değişkenleri tanımlanana kadar deploy adımı atlanır (build ve testler yine çalışır).
+# "production" ortamının değişkenleri tanımlanana kadar deploy adımı atlanır (build, test ve güvenlik yine çalışır).
 name: Azure'a deploy
 
 on:
@@ -9,19 +11,19 @@ on:
   workflow_dispatch:
 
 permissions:
-  id-token: write   # Azure'a şifresiz (OIDC) giriş
   contents: read
 
 concurrency:
   group: azure-production
   cancel-in-progress: false
 
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: 1
+  DOTNET_NOLOGO: 1
+
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      DOTNET_CLI_TELEMETRY_OPTOUT: 1
-      DOTNET_NOLOGO: 1
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -55,9 +57,102 @@ jobs:
           path: out
           retention-days: 7
 
-  deploy:
-    needs: build
+  # --- Güvenlik ---
+
+  codeql:
+    name: CodeQL (${{ matrix.language }})
     runs-on: ubuntu-latest
+    permissions:
+      security-events: write   # sonuçları Security → Code scanning'e yükler
+      contents: read
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [csharp, javascript-typescript]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+          queries: security-extended
+      - uses: github/codeql-action/analyze@v4
+        with:
+          category: /language:${{ matrix.language }}
+
+  dependencies:
+    name: Bağımlılık açıkları
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: npm (tüm bağımlılıklar, her önem düzeyi)
+        working-directory: web
+        run: npm ci --ignore-scripts && npm audit --audit-level=low
+
+      - name: NuGet (doğrudan + dolaylı paketler)
+        run: |
+          found=0
+          for p in api tests; do
+            dotnet restore "$p" >/dev/null
+            out=$(dotnet list "$p" package --vulnerable --include-transitive)
+            echo "$out"
+            if echo "$out" | grep -q "has the following vulnerable packages"; then found=1; fi
+          done
+          if [ "$found" = 1 ]; then echo "::error::Açığı olan NuGet paketi var"; exit 1; fi
+
+  secrets:
+    name: Gizli anahtar taraması
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # tüm geçmiş: silinmiş ama commit'te kalmış anahtarlar da bulunsun
+      - name: gitleaks (sürüm ve sağlama sabit)
+        run: |
+          curl -sSL -o gl.tgz https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz
+          echo "5bc41815076e6ed6ef8fbecc9d9b75bcae31f39029ceb55da08086315316e3ba  gl.tgz" | sha256sum -c -
+          tar xzf gl.tgz gitleaks
+          ./gitleaks git . --redact --no-banner --exit-code 1
+
+  security-gate:
+    name: Güvenlik kapısı
+    needs: [codeql, dependencies, secrets]
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: read
+    steps:
+      - name: Açık CodeQL uyarısı olmasın
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Yanlış alarm GitHub'da gerekçesiyle "Dismiss" edilirse kapıyı tutmaz; düzeltilen uyarılar analizde kendiliğinden kapanır
+          alerts=$(gh api --paginate \
+            "repos/${{ github.repository }}/code-scanning/alerts?ref=${{ github.ref }}&state=open&tool_name=CodeQL&per_page=100" \
+            --jq '.[] | "\(.rule.security_severity_level // .rule.severity)\t\(.rule.id)\t\(.most_recent_instance.location.path):\(.most_recent_instance.location.start_line)"')
+          if [ -n "$alerts" ]; then
+            echo "::error::Açık CodeQL uyarısı var; deploy durduruldu. Security → Code scanning'e bakın."
+            echo "$alerts"
+            exit 1
+          fi
+          echo "Açık CodeQL uyarısı yok."
+
+  deploy:
+    needs: [build, security-gate]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write   # Azure'a şifresiz (OIDC) giriş
+      contents: read
     environment:
       name: production
       url: https://${{ vars.AZURE_WEBAPP_NAME }}.azurewebsites.net

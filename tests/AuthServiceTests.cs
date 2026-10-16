@@ -15,7 +15,7 @@ public sealed class AuthServiceTests : IDisposable
 
     public void Dispose() => File.Delete(_file);
 
-    AuthService Create(string user = "analist", string password = "dogru-sifre-123")
+    AuthService Create(string user = "analist", string password = "dogru-sifre-123") // gitleaks:allow (test şifresi)
     {
         AuthService.SetPassword(_file, user, password);
         return new AuthService(_file, _clock);
